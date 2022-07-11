@@ -1,0 +1,134 @@
+---
+title: "Untitled"
+---
+
+```{r setup, include=FALSE}
+setwd("/Volumes/GoogleDrive/My Drive/TDA_Summer2021/")
+knitr::opts_chunk$set(echo = TRUE)
+# read in table_plasmid_pek CSV
+table_plasmid_pek<-read.csv("plasmids_species_pEK204.csv")
+
+id_name2 = table_jaccard_pek$Chrom
+
+#species_pek <- data.frame()
+#for (i in 1:length(id_name22)) {
+  #species_pek[i] <- c(input[grepl(id_name22[i], input[["Species"]]), ])
+#  species_pek <- rbind(subset(input, Species == id_name22[i]))
+#}
+
+#check uniqueness of chromosome
+length(table_plasmid_pek$Chrom) #17703 
+length(unique(table_plasmid_pek$Chrom)) #4419
+
+for (j in 1:length(id_name2)){  #e.g. Five plasmids information for six species
+  #id_name2[j] = unique(table_plasmid_pek$Chrom)[j]
+  print(getchrom.plasmid(id_name2[j],table_plasmid_pek))  } 
+
+#-----add jaccard index of each chrom and plasmid into dataframe
+table_jaccard_pek <- data.frame(Chrom=character()) #create a dataframe with empty column
+#create dataframe with column number of length(plasmid) per chrom,
+other.col2 <- setNames(data.frame(matrix(ncol = length(table_plasmid_pek$Plasmid)/length(unique(table_plasmid_pek$Chrom)), #total no. of plasmid per chrom 
+                                     nrow = 0)), 
+                   unique(table_plasmid_pek$Plasmid)) #change column name with plasmid acc no.
+table_jaccard_pek <- cbind(table_jaccard_pek,other.col2)
+#bind 1st column with other columns with Plasmid ID
+for (i in 1:length(id_name2)) { #put in jaccard index
+  table_jaccard_pek[length(table_jaccard_pek$Chrom)+1,] <-
+  c(id_name2[i], format(round(jaccard(subset(table_plasmid_pek,Chrom == id_name2[i])),3), nsmall=3))}
+
+table_jaccard_pek <- table_jaccard_pek[, colSums(table_jaccard_pek > 0.001) > 0]
+table_jaccard_pek <- table_jaccard_pek[rowSums(table_jaccard_pek > 0.001)>1, ]
+table_jaccard_pek <- table_jaccard_pek[order(table_jaccard_pek$Chrom),]
+
+# write out to CSV
+write.csv(table_jaccard_pek,"OUTPUT/pek204/table_jaccard_pek.csv")
+
+#-----table of interaction
+table_interaction_pek <- c()
+table_interaction_pek <- data.frame(Chrom=character()) # dataframe with empty column
+#create new columns with the length of plasmid per chrom,
+#column name with plasmid acc no.
+table_interaction_pek <- cbind(table_interaction_pek,other.col2)
+#bind  1st column with other columns 
+
+for (i in 1:length(id_name2)) { #add in interactions
+  table_interaction_pek[length(table_interaction_pek$Chrom)+1,] <-
+    c(id_name2[i],  getchrom.plasmid(id_name2[i],table_plasmid_pek)$Interactions)
+  }
+table_interaction_pek <- table_interaction_pek[, colSums(table_interaction_pek != 0) > 0] #delete columns with 0 values
+table_interaction_pek <- table_interaction_pek[rowSums(table_interaction_pek != 0)>1, ] #delete rows with 0 values
+table_interaction_pek <- table_interaction_pek[order(table_interaction_pek$Chrom),]
+
+# write out to CSV
+write.csv(table_interaction_pek,"OUTPUT/pek204/table_interaction_pek.csv")
+
+#-----table of interacting genes
+table_interacting_genes_pek <- data.frame(Chrom=character()) # dataframe with an empty column
+#create new columns with the length of plasmid per chrom,
+#column name with plasmid acc no.
+table_interacting_genes_pek <- cbind(table_interacting_genes_pek,other.col2) 
+# bind the first column with other columns with Plasmid ID
+
+for (i in 1:length(id_name2)) { #add in interacting genes
+  table_interacting_genes_pek[length(table_interacting_genes_pek$Chrom)+1,] <-
+    c(id_name2[i],  getchrom.plasmid(id_name2[i],table_plasmid_pek)$Interacting_genes) }
+
+table_interacting_genes_pek <- #delete columns with 0 values
+   table_interacting_genes_pek[, colSums(table_interacting_genes_pek != 0) > 0]
+table_interacting_genes_pek <- #delete rows with 0 values
+  table_interacting_genes_pek[rowSums(table_interacting_genes_pek != 0)>1, ]
+table_interacting_genes_pek <- table_interacting_genes_pek[order(table_interacting_genes_pek$Chrom),]
+
+# write out to CSV
+write.csv(table_interacting_genes_pek,"OUTPUT/pek204/table_interacting_genes_pek.csv")
+
+access.no2 <- unique(table_plasmid_pek$Plasmid)
+for (i in 1:length(access.no2)) { #show metadata of plasmids
+  print(getdata(access.no2[i])) }
+
+#---- table shows with plasmid metadata 
+mt <- c("name","species","strain","genes","unique.genes","element","length")
+table_metadata_pek <- data.frame(Accession=character()) #create a dataframe with an empty column
+m <- setNames(data.frame(matrix(ncol = length(mt), nrow = 0)),mt)
+#create dataframe with column number of length(mt),
+#change colnames with variables in mt
+table_metadata_pek <- cbind(table_metadata_pek,m) #combine the first column with other variables
+
+for (i in 1:length(access.no2)) { #get plasmids metadata
+  table_metadata_pek[length(table_metadata_pek$Accession)+1,] <-
+       c(access.no2[i], getdata(access.no2[i])) } #  end for
+as.data.frame(t(table_metadata_pek))
+
+# write out to CSV
+write.csv(table_metadata_pek,"OUTPUT/pek204/table_metadata_pek.csv")
+
+# plasmid annotation
+name <- c()
+species <- c()
+strain <- c()
+genes <- c()
+unique.genes <- c()
+element <-c()
+length <- c()
+for(i in 1:length(colnames(table_jaccard_pek))){
+  for (k in 1:length(table_metadata_pek$Accession)) {
+   if(colnames(table_jaccard_pek)[i] == table_metadata_pek$Accession[k]){
+    name[i] <- c(table_metadata_pek$name[k])
+    species[i] <- c(table_metadata_pek$species[k])
+    strain[i] <- c(table_metadata_pek$strain[k])
+    genes[i] <- c(table_metadata_pek$genes[k])
+    unique.genes[i] <- c(table_metadata_pek$unique.genes[k])
+    element[i] <- c(table_metadata_pek$element[k])
+    length[i] <- c(table_metadata_pek$length[k])
+  } 
+}
+}
+
+annotation2 <- na.omit(as.data.frame(cbind(name,species,strain,genes,unique.genes,element,length)))
+write.csv(t(annotation2),"OUTPUT/pek204/annotation2.csv")
+
+###
+
+
+```
+

@@ -1,0 +1,641 @@
+---
+title: "complete R script"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(genbankr)
+# install.packages("igraph") # v1.0.0
+library(igraph)
+# BiocManager::install(c("STRINGdb"), ask=F) # , version="3.8") #  
+# see https://bioconductor.org/packages/devel/bioc/vignettes/STRINGdb/inst/doc/STRINGdb.pdf
+#STRINGdb$methods()              # To list all the methods available.
+#STRINGdb$help("get_graph")      # To visualize their documentation.
+library(STRINGdb)     # activate the STRINGdb library # eg species_id=9606 is Homo sapiens 
+#install.packages("VennDiagram")
+library(VennDiagram)
+#install.packages("rentrez")
+library(rentrez)
+#install.packages("tidyverse")
+library(tidyverse)
+# install.packages("dplyr")
+library(dplyr)
+# install.packages("stringr")
+library(stringr)
+#BiocManager::install("GenomicRanges")
+library(GenomicRanges)
+#install.packages("readr")
+library(readr)
+#install.packages("ggExtra")
+library("ggExtra")
+#install.packages("ggrepel")
+library(ggrepel)
+
+####### define functions #########
+#--- function1 --- function for plasmids 
+getplasmidgenes <- function(GBAccession_ID){ #  function 
+  plasmid <- readGenBank(GBAccession(GBAccession_ID), partial=TRUE)
+  # cds(plasmid)$product # gene long names
+  # cds(plasmid)$gene    # gene short names
+  plasmid_genes <- unique(sort(tolower(as.vector(na.omit( cds(plasmid)$gene))))) 
+  plasmid_genes <- gsub("[()]",  replacement="", plasmid_genes) # remove ( + )
+  # unique protein-coding genes all uppercase sorted #  length(plasmid_genes)
+  return(tolower(plasmid_genes)) } # end function 
+
+#--- function2 --- get plasmid information by species name as input #modified
+getchrom.plasmid <- function(chrom_name,dataframe){ 
+  dt <- subset(dataframe,Chrom == chrom_name)
+  names(dt)[names(dt) == "Plasmid"] <- chrom_name
+  dt <- subset(dt, select = -c(Chrom))
+  dt } 
+
+#--- function3 --- get intersection of a chromosome across all plasmids 
+jaccard <- function(a) {  # a is dataframe (e.g.only data of E.coli K12)
+  intersection <- as.integer(a$Interacting_genes)
+  chrom.total.genes <- as.integer(a$Total_Genes)
+  plasmid.genes <- as.integer(a$Genes)
+  union = chrom.total.genes + plasmid.genes - intersection
+  return (intersection/union) #value of intersection between chromosome and plasmids 
+}                             # (e.g.K12 vs pEK499, K12 vs pEK204, K12 vs pEK516)
+
+#--- function4 --- get plasmid metadata: (1) plasmid nickname, (2) species,
+# (3) strain, (4) length, (5) number of genes
+#table <- setDT(table, keep.rownames = TRUE)[] #convert rowname to the first column
+getdata <- function(GBAccession_ID){
+  plasmid <- readGenBank(GBAccession(GBAccession_ID), partial=TRUE)
+  #read in information from plasmid accession number
+  w <- elementMetadata(sources(plasmid))
+  #get metadata(type,organism,mol_type,strain,db_xref,plasmid,loctype,temp_grouping_id)
+  name <- w$plasmid #plasmid name
+  species <- w$organism #species
+  species <- gsub(" ",  replacement="_", species)
+  strain <- w$strain #strain
+  if(is.null(strain) == TRUE){
+    strain <- 0
+  }
+  genes <- elementMetadata(genes(plasmid))$gene 
+  genes <- gsub("[()]",  replacement="", genes) 
+  genes <- length(genes) #number of plasmid genes
+  u.genes <- unique(sort(tolower(as.vector(na.omit(cds(plasmid)$gene))))) #remove redundant genes
+  u.genes <- gsub("[()]",  replacement="", u.genes) 
+  u.genes <- length(u.genes)    #number of unique plasmid genes
+  element <- length(elementMetadata(exons(plasmid))$type)
+  info <- seqinfo(plasmid)  #get plasmid information
+  df_plasmid <- as.data.frame(info)
+  length <- df_plasmid$seqlengths #plasmid length
+  metadata <- c(name,species,strain,genes,u.genes,element,length) #combine all data
+}
+
+#--- function5 --- get plasmid genes 
+getgenes.short <- function(GBAccession_ID){
+  plasmid <- readGenBank(GBAccession(GBAccession_ID), partial=TRUE)
+  #read in information from plasmid accession number
+  genes <- unique(sort(tolower(as.vector(na.omit(cds(plasmid)$gene))))) #remove redundant genes
+  genes <- gsub("[()]",  replacement="", genes) 
+  as.data.frame(genes)
+}
+
+######## end set up functions #########
+
+#------------ pOXA-48 analysis ----------
+getwd()
+setwd("/Volumes/GoogleDrive/My Drive/TDA_Summer2021/RMD_FILES")
+input <- data.frame(read.csv("stringInput.csv")) # species, proteins, String_ID
+input$Species <- gsub("/",  replacement="-", input$Species)
+input$interactions <- rep(0, length(input$Species))
+
+#select species of origin of poxa48
+species_poxa48 <- rbind(input[grepl("Klebsiella", input[["Species"]]), ], #2 chroms
+            input[grepl("Serratia", input[["Species"]]), ],   #13
+            input[grepl("Escherichia", input[["Species"]]), ], #12
+            input[grepl("Shigella", input[["Species"]]), ]) #1 
+species_poxa48 <- species_poxa48[-c(18),] # remove Escherichia_coli_str._K-12_substr._W3110_
+# 27 species
+
+#get species STRING_id from "stringInput.csv"
+speciesID = species_poxa48$ID
+#get chrom name from "stringInput.csv"
+id_name = species_poxa48$Species
+
+#get plasmid accession numbers # read in txt file downloaded from NCBI
+df <- tibble(lines = readLines('nuccore_result.txt'))
+# make a new dataframe with only the rows have accession number
+data <- c() 
+for (i in length(df$lines)){ # for elements in dataframe
+  if((i %% 4)==0){ # if i modulus 4 == 4, 8, 12, 16 etc
+    data <- df %>% filter(row_number()%%4==0) } 
+}
+
+tmp <- sapply(data, as.character) #save elements in dataframe into a string
+tmp2 <- map(strsplit(tmp,split = " "), 1) #extract the first element only
+accessID2 <- unlist(tmp2) # a list of pOXA-48 accession number 
+                          # 31 plasmid accession numbers 
+
+#create an empty table
+table_plasmid_poxa <- data.frame(Plasmid=character(), Chrom=character(), Genes=integer(), 
+                             Interacting_genes=integer(), Interactions=integer(),
+                             Total_Genes=integer(), Total_Interactions=integer())
+#input id for species ("K12", "O157H7", "CFT073"...) (from input.csv)
+o <- which(input$ID %in% speciesID)
+  
+########### get chromosomal genes  # 
+for (k in o[1:length(o)]){           # change k  1:4445
+      
+      string_db <- STRINGdb$new(version="11", species=input$ID[k], # new STRINGdb object
+                                score_threshold=400, input_directory="")
+      # string_db$proteins$preferred_name contains the list of genes, eg "DR97_1"
+      
+      mapped   <- string_db$map(data.frame(gene_name = string_db$proteins$preferred_name),
+                                'gene_name', removeUnmappedRows=T) 
+      # mapped is a table with gene_name and STRING_id      # str(mapped) } } 
+      links_all1 = string_db$get_interactions(string_db$mp(string_db$proteins$preferred_name)) 
+      links_all <- links_all1[!duplicated(links_all1[,c('from','to')]),]
+      # links_all is a table with the STRING_ids of the 
+      # connected proteins (cols 1 & 2) & their score (col 3)
+      # links_all does not contain duplicates (unlike links_all1)
+
+      # Now create a table for all genes with STRING_ids and combined score
+      from_vector <- c()			# empty vector for gene names rather than STRING_ids
+      to_vector <- c()				# empty vector for gene names rather than STRING_ids  
+      for (i in 1:length(links_all$from)){		# for each STRING_id, extract the gene name
+        from_vector[i] <- subset(mapped, STRING_id == links_all$from[i])$gene_name
+        to_vector[i] <- subset(mapped, STRING_id == links_all$to[i])$gene_name }
+      links_all$from_ID <- tolower(from_vector)
+      links_all$to_ID <- tolower(to_vector) 
+      # str(links_all)  # now: from, to, combined_score, from_ID, to_ID
+
+      write.csv(links_all, paste("OUTPUT/poxa/", input$Species[k], "_chrom_data.csv", sep=""))
+      input$interactions[k] <- length(links_all$combined_score)
+      
+   ######## get plasmid's gene interactions # select plasmid-associated interactions
+    for (jj in 1:length(accessID2)){
+      access_ID2 = accessID2[jj] # select plasmid 
+      p1 <- getplasmidgenes(access_ID2) # str(p1) # 84 genes, single vector of names
+      
+      if(length(p1) >0){ # if genes, else ignore
+      mapped_p <- data.frame() # mapped_pEK499$STRING_id # has from/to data
+      for (m in 1:length(p1)){	# get plasmid genes 
+        mapped_p <- rbind(mapped_p, data.frame(subset(links_all, (to_ID==p1[m])|(from_ID==p1[m]))))}
+      dim(mapped_p) # association between plasmid and chromosomes
+      write.csv(mapped_p, paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, ".csv", sep=""))
+     
+      # add row to plasmid table
+      table_plasmid_poxa[length(table_plasmid_poxa$Plasmid)+1,] <-
+           c(access_ID2, input$Species[k],  length(p1), # number of plasmid genes
+             length(unique(c(mapped_p$from_ID, mapped_p$to_ID))), length(mapped_p$from),
+            length(mapped[,1]), input$interactions[k])  # str(table_plasmid_poxa)
+      
+     if(dim(mapped_p)[1] > 0){ # if genes found
+
+      pdf(paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, "_plasmid-chrom_subnetwork.pdf", sep=""),
+          width=16, height=20)
+      string_db$plot_network(string_db$mp(unique(c(mapped_p$from_ID, mapped_p$to_ID)))) # make plot 
+      dev.off()    # make a plot of the network for fun
+      
+      pdf(paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, "_intraplasmid_subnetwork.pdf", sep=""),
+          width=16, height=20)
+      string_db$plot_network(string_db$mp(p1)) # make plot 
+      dev.off()    # make a plot of the network for fun
+      
+      #  plot histogram of score distribution
+      pdf(paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, "_chrom_histogram.pdf",sep=""),
+          width=8, height=10)
+      hist(mapped_p$combined_score, xlab="score", xlim=c(0,1000), ylab="#pairs",
+           cex=2, breaks=90,   xaxp=c(0,1000,40), yaxp=c(0,4000,40) )
+      grid(nx=10, ny=10, col="lightgray", lty="dotted", equilogs = TRUE)
+      dev.off()         # output = example_data 
+     } # end if matching genes
+      
+      } # end if plasmid genes found
+   } # end for plasmids
+} # end for each chrom
+
+str(table_plasmid_poxa) # check
+write.csv(table_plasmid_poxa, "table_plasmid_poxa.csv")
+
+# read in table_plasmid_poxa CSV
+table_plasmid_poxa<-read.csv("table_plasmid_poxa.csv")
+
+#check getchrom.plasmid function
+for (j in 1:length(id_name)){  #e.g. 31 plasmids information across 27 species
+  print(getchrom.plasmid(id_name[j],table_plasmid_poxa))  } # end loop
+
+
+#-----add jaccard index of each chrom and plasmid into dataframe
+#create a dataframe with empty column
+table_jaccard_poxa <- data.frame(Chrom=character()) 
+#bind 1st column with other columns that have Plasmid ID
+table_jaccard_poxa <- cbind(table_jaccard_poxa, 
+          setNames(data.frame(matrix(ncol = length(table_plasmid_poxa$Plasmid)/length(unique(table_plasmid_poxa$Chrom)), #no. of columns = total no. of plasmid per chrom 
+                                     nrow = 0)), 
+                   unique(table_plasmid_poxa$Plasmid))) # set column names with plasmid accession number
+
+for (i in 1:length(id_name)) { #add in jaccard index
+  table_jaccard_poxa[length(table_jaccard_poxa$Chrom)+1,] <-
+  c(id_name[i], format(round(jaccard(subset(table_plasmid_poxa,Chrom == id_name[i])),3), nsmall=3))}
+
+#remove columns and rows that are equal to 0
+table_jaccard_poxa <- table_jaccard_poxa[, colSums(table_jaccard_poxa > 0.001) > 0]
+table_jaccard_poxa <- table_jaccard_poxa[rowSums(table_jaccard_poxa > 0.001)>1, ]
+table_jaccard_poxa <- table_jaccard_poxa[order(table_jaccard_poxa$Chrom),]
+  
+# save as CSV
+write.csv(table_jaccard_poxa,"OUTPUT/poxa/table_jaccard_poxa.csv")
+
+#-----table of interaction
+# dataframe with empty column
+table_interaction_poxa <- c()
+table_interaction_poxa <- data.frame(Chrom=character()) 
+#create new columns
+other.col <-  setNames(data.frame(matrix(ncol = length(table_plasmid_poxa$Plasmid)/length(unique(table_plasmid_poxa$Chrom)), #total no. of plasmid per chrom 
+                                     nrow = 0)), 
+                   unique(table_plasmid_poxa$Plasmid)) #set col names with plasmid accession number
+#bind  1st column with other columns 
+table_interaction_poxa <- cbind(table_interaction_poxa,other.col)
+
+for (i in 1:length(id_name)) { #add in interactions
+  table_interaction_poxa[length(table_interaction_poxa$Chrom)+1,] <-
+    c(id_name[i],  getchrom.plasmid(id_name[i],table_plasmid_poxa)$Interactions)
+}
+
+#remove columns and rows that are equal to 0
+table_interaction_poxa <- table_interaction_poxa[, colSums(table_interaction_poxa != 0) > 0] #delete columns with 0s
+table_interaction_poxa <- table_interaction_poxa[rowSums(table_interaction_poxa != 0)>1, ] #delete rows with 0s
+table_interaction_poxa <- table_interaction_poxa[order(table_interaction_poxa$Chrom),]
+
+# save as CSV
+write.csv(table_interaction_poxa,"OUTPUT/poxa/table_interaction_poxa.csv")
+
+#-----table of interacting genes
+# dataframe with an empty column
+table_interacting_genes_poxa <- data.frame(Chrom=character()) 
+# bind the first column with other columns with Plasmid ID
+table_interacting_genes_poxa <- cbind(table_interacting_genes_poxa,other.col) 
+
+for (i in 1:length(id_name)) { #add in interacting genes
+  table_interacting_genes_poxa[length(table_interacting_genes_poxa$Chrom)+1,] <-
+    c(id_name[i],  getchrom.plasmid(id_name[i],table_plasmid_poxa)$Interacting_genes) }
+
+#remove columns and rows that are equal to 0
+table_interacting_genes_poxa <- 
+   table_interacting_genes_poxa[, colSums(table_interacting_genes_poxa != 0) > 0]
+table_interacting_genes_poxa <- 
+  table_interacting_genes_poxa[rowSums(table_interacting_genes_poxa != 0)>1, ]
+table_interacting_genes_poxa <- table_interacting_genes_poxa[order(table_interacting_genes_poxa$Chrom),]
+
+# save as CSV
+write.csv(table_interacting_genes_poxa,"OUTPUT/poxa/table_interacting_genes_poxa.csv")
+
+# metadata of 31 plasmids
+for (i in 1:length(accessID2)) { 
+  print(getdata(accessID2[i])) }
+
+#create a table for the plasmid metadata 
+mt <- c("name","species","strain","genes","unique.genes","element","length")
+#create a dataframe with an empty column
+table_metadata_poxa <- data.frame(Accession=character()) 
+#more columns based on the number of variables in mt,
+#change colnames with variables in mt
+m <- setNames(data.frame(matrix(ncol = length(mt), nrow = 0)),mt)
+#combine the first column with the other columns
+table_metadata_poxa <- cbind(table_metadata_poxa,m) 
+
+for (i in 1:length(accessID2)) { #get plasmids metadata
+  table_metadata_poxa[length(table_metadata_poxa$Accession)+1,] <-
+       c(accessID2[i], getdata(accessID2[i])) } #  end for
+as.data.frame(t(table_metadata_poxa))
+
+# save as CSV
+write.csv(table_metadata_poxa,"OUTPUT/poxa/table_metadata_poxa.csv")
+
+# plasmid annotation
+name <- c()
+species <- c()
+strain <- c()
+genes <- c()
+unique.genes <- c()
+element <-c()
+length <- c()
+for(i in 1:length(colnames(table_jaccard_poxa))){
+  for (k in 1:length(table_metadata_poxa$Accession)) {
+   if(colnames(table_jaccard_poxa)[i] == table_metadata_poxa$Accession[k]){
+    name[i] <- c(table_metadata_poxa$name[k])
+    species[i] <- c(table_metadata_poxa$species[k])
+    strain[i] <- c(table_metadata_poxa$strain[k])
+    genes[i] <- c(table_metadata_poxa$genes[k])
+    unique.genes[i] <- c(table_metadata_poxa$unique.genes[k])
+    element[i] <- c(table_metadata_poxa$element[k])
+    length[i] <- c(table_metadata_poxa$length[k])
+  } 
+}
+}
+
+annotation <- na.omit(as.data.frame(cbind(name,species,strain,genes,unique.genes,element,length)))
+write.csv(t(annotation),"OUTPUT/poxa/annotation.csv")
+
+#-----------pEK204 analysis--------------
+#set working directory
+getwd()
+setwd("~/Downloads/TDA_Summer2021")
+# read in the table_plasmid_pek CSV (obtained the table by using similar method in pOXA48 analysis)
+table_plasmid_pek<-read.csv("plasmids_species_pEK204.csv")
+
+#get the chromosome name
+id_name3 = unique(table_plasmid_pek$Chrom)
+
+#check uniqueness of chromosome
+length(table_plasmid_pek$Chrom) #17703 
+length(unique(table_plasmid_pek$Chrom)) #4419
+
+#get plasmids information across all species
+for (j in 1:length(id_name3)){ 
+  print(getchrom.plasmid(id_name3[j],table_plasmid_pek))  } 
+
+#-----add jaccard index of each chrom and plasmid into dataframe
+#create a dataframe with empty column
+table_jaccard_pek.2 <- data.frame(Chrom=character()) 
+#more columns based on the length of plasmid per chrom,
+#change column names with plasmid acc no.
+other.col2 <- setNames(data.frame(matrix(ncol = length(table_plasmid_pek$Plasmid)/length(unique(table_plasmid_pek$Chrom)), #total no. of plasmid per chrom 
+                                     nrow = 0)), 
+                   unique(table_plasmid_pek$Plasmid)) 
+#bind 1st column with other columns with Plasmid ID
+table_jaccard_pek.2 <- cbind(table_jaccard_pek.2,other.col2)
+
+for (i in 1:length(id_name3)) { #add in jaccard index
+  table_jaccard_pek.2[length(table_jaccard_pek.2$Chrom)+1,] <-
+  c(id_name3[i], format(round(jaccard(subset(table_plasmid_pek,Chrom == id_name3[i])),3), nsmall=3))}
+
+#remove rows and columns that are < 0
+table_jaccard_pek.2 <- table_jaccard_pek.2[, colSums(table_jaccard_pek.2 > 0.001) > 0]
+table_jaccard_pek.2 <- table_jaccard_pek.2[rowSums(table_jaccard_pek.2 > 0.001)>1, ]
+table_jaccard_pek.2 <- table_jaccard_pek.2[order(table_jaccard_pek.2$Chrom),]
+
+# save as CSV
+write.csv(table_jaccard_pek.2,"table_jaccard_pek.2.csv")
+
+#-----table of interaction
+# dataframe with empty column
+table_interaction_pek.2 <- data.frame(Chrom=character()) 
+#bind the first column with other columns 
+table_interaction_pek.2 <- cbind(table_interaction_pek.2,other.col2)
+
+for (i in 1:length(id_name3)) { #add in interactions
+  table_interaction_pek.2[length(table_interaction_pek.2$Chrom)+1,] <-
+    c(id_name3[i],  getchrom.plasmid(id_name3[i],table_plasmid_pek)$Interactions)
+}
+
+#remove rows and columns with 0s
+table_interaction_pek.2 <- table_interaction_pek.2[, colSums(table_interaction_pek.2 != 0) > 0] #delete columns with 0 
+table_interaction_pek.2 <- table_interaction_pek.2[rowSums(table_interaction_pek.2 != 0)>1, ] #delete rows with 0 
+table_interaction_pek.2 <- table_interaction_pek.2[order(table_interaction_pek.2$Chrom),]
+
+#subset samples that are present in table_jaccard_pek
+table_interaction_pek.2<- subset(table_interaction_pek.2,Chrom %in% table_jaccard_pek.2$Chrom)
+
+# save as CSV
+write.csv(table_interaction_pek.2,"OUTPUT/pek204_4419/table_interaction_pek.2.csv")
+
+#-----table of interacting genes
+table_interacting_genes_pek.2 <- data.frame(Chrom=character()) # dataframe with an empty column
+#bind the first column with the other columns that have Plasmid ID as column names
+table_interacting_genes_pek.2 <- cbind(table_interacting_genes_pek.2,other.col2) 
+
+for (i in 1:length(id_name3)) { #add in interacting genes
+  table_interacting_genes_pek.2[length(table_interacting_genes_pek.2$Chrom)+1,] <-
+    c(id_name3[i],  getchrom.plasmid(id_name3[i],table_plasmid_pek)$Interacting_genes) }
+
+#remove rows and columns with 0s
+table_interacting_genes_pek.2 <- #delete columns with 0s
+   table_interacting_genes_pek.2[, colSums(table_interacting_genes_pek.2 != 0) > 0]
+table_interacting_genes_pek.2 <- #delete rows with 0s
+  table_interacting_genes_pek.2[rowSums(table_interacting_genes_pek.2 != 0)>1, ]
+table_interacting_genes_pek.2 <- table_interacting_genes_pek.2[order(table_interacting_genes_pek.2$Chrom),]
+
+#subset samples that are present in table_jaccard_pek
+table_interacting_genes_pek.2 <- subset(table_interacting_genes_pek.2,Chrom %in% table_jaccard_pek.2$Chrom)
+
+# save as CSV
+write.csv(table_interacting_genes_pek.2,"OUTPUT/pek204_4419/table_interacting_genes_pek.2.csv")
+
+#show metadata of 4 plasmids
+access.no2 <- unique(table_plasmid_pek$Plasmid)
+for (i in 1:length(access.no2)) { 
+  print(getdata(access.no2[i])) }
+
+#create a table with plasmid metadata 
+mt <- c("name","species","strain","genes","unique.genes","element","length")
+table_metadata_pek <- data.frame(Accession=character()) #create a dataframe with an empty column
+m <- setNames(data.frame(matrix(ncol = length(mt), nrow = 0)),mt)
+#create a dataframe with a column number of length(mt),
+#change colnames with variables in mt
+table_metadata_pek <- cbind(table_metadata_pek,m) #combine the first column with other variables
+
+for (i in 1:length(access.no2)) { #get plasmids metadata
+  table_metadata_pek[length(table_metadata_pek$Accession)+1,] <-
+       c(access.no2[i], getdata(access.no2[i])) } #  end for
+as.data.frame(t(table_metadata_pek))
+
+# save as CSV
+write.csv(table_metadata_pek,"OUTPUT/pek204_4419/table_metadata_pek.csv")
+
+# plasmid annotation (metatdata)
+name <- c()
+species <- c()
+strain <- c()
+genes <- c()
+unique.genes <- c()
+element <-c()
+length <- c()
+for(i in 1:length(colnames(table_jaccard_pek.2))){
+  for (k in 1:length(table_metadata_pek$Accession)) {
+   if(colnames(table_jaccard_pek.2)[i] == table_metadata_pek$Accession[k]){
+    name[i] <- c(table_metadata_pek$name[k])
+    species[i] <- c(table_metadata_pek$species[k])
+    strain[i] <- c(table_metadata_pek$strain[k])
+    genes[i] <- c(table_metadata_pek$genes[k])
+    unique.genes[i] <- c(table_metadata_pek$unique.genes[k])
+    element[i] <- c(table_metadata_pek$element[k])
+    length[i] <- c(table_metadata_pek$length[k])
+  } 
+}
+}
+
+annotation3 <- na.omit(as.data.frame(cbind(name,species,strain,genes,unique.genes,element,length)))
+write.csv(t(annotation3),"OUTPUT/pek204_4419/annotation3.csv")
+
+#get a list of plasmid genes
+plasmid_genes <- c()
+plasmid.acc.no. <- c(unique(table_plasmid_pek$Plasmid))
+for (i in 1:length(plasmid.acc.no.)) {
+  plasmid_genes[i] <- c(getgenes.short(plasmid.acc.no.[i])) }
+
+#----ratio between pek204 and pek499 (jaccard index)-----
+#read in csv file
+#jaccard_table <-read.csv("table_jaccard_pek.2.csv")
+jaccard_table <- table_jaccard_pek.2 
+str(jaccard_table)
+jaccard_table$EU935739 <- as.numeric(jaccard_table$EU935739)
+jaccard_table$EU935740 <- as.numeric(jaccard_table$EU935740)
+jaccard_table$EU935738 <- as.numeric(jaccard_table$EU935738)
+jaccard_table$NZ_HG941719.1 <- as.numeric(jaccard_table$NZ_HG941719.1)
+
+#add ratio as a column
+jaccard_table <- jaccard_table %>% mutate(Ratio = EU935740/EU935739) 
+#replace inf with "NA"
+jaccard_table$Ratio[which(!is.finite(jaccard_table$Ratio))] <- NA
+#find mean,sd
+t.ratio <- as.numeric(log2(jaccard_table$Ratio)) #log2 transformation of jaccard ratio
+t.ratio[sapply(t.ratio, is.infinite)] <- NA
+raw.metric <- as.numeric(na.omit(t.ratio)) #remove NA 
+str(raw.metric)
+mean <- as.numeric(mean(raw.metric))
+sd <- as.numeric(sd(raw.metric))
+
+#plot the normal distribution of association with pEK204
+norm <- dnorm(raw.metric,mean,sd)
+plot(raw.metric,norm)
+
+#normalization, the ratio after adjustment
+final.metric <- c() 
+for(i in 1:length(t.ratio)){ #adjustment: final = (metric - mean)/SD
+  final.metric[i] <- NA
+  if(!(is.na(t.ratio[i]))){ final.metric[i] <- as.numeric(t.ratio[i]- mean)/sd }
+  jaccard_table$Final_metric[i] <- final.metric[i] }
+
+#add adjustment as a column to jaccard_table
+jaccard_table <- jaccard_table %>% mutate(Adjustment = final.metric)
+metric.final <- as.numeric(na.omit(final.metric))
+metric.final
+mean.f <- as.numeric(mean(metric.final[metric.final != -Inf]))
+mean.f
+sd.f <- as.numeric(sd(metric.final[metric.final != -Inf]))
+sd.f
+
+#plot the normal distribution of adjusted association with pEK204
+norm.f <- dnorm(metric.final,mean.f,sd.f)
+norm.f
+plot(metric.final,norm.f,
+     xlab='pEK204/pEK499 (Final Ratio)',ylab='Normal distribution', 
+     cex=0.3, cex.main=1,cex.axis=1, cex.lab=1, pch=19) + grid()
+
+write.csv(jaccard_table,"jaccard_table_ratio.csv")
+
+#Adjusted association with pEK204 vs The Number of Interacting Genes with pEK204
+#read in data of interacting genes
+genes_table <-read.csv("table_interacting_genes_pek.2.csv")
+#combine the jaccard final metric and interacting genes of each chrom
+
+test1 <- merge(genes_table, jaccard_table, by='Chrom')
+View(test1)
+str(test1)
+
+final_data <- data.frame(test1$Chrom, test1$Final_metric, test1$EU935740.x)
+#rename the column names
+names(final_data) <- c("chrom","final.metric","interacting.genes")
+
+#extract the chroms that meet the conditions
+top <- subset(final_data, final.metric >0 & interacting.genes >400) 
+#specify top in a new column
+top$species <- top$chrom
+
+#the other chroms in the final_data
+others <- subset(final_data, !(final_data$chrom %in% top$chrom))
+#specify others in a new column
+others$species <- ""
+others <- na.omit(others) #1053
+
+#combine all data (chrom, final metric, interacting genes, species)
+all <- rbind(top,others) #1060
+write.csv(all, "final.metric-pek204.interacting.genes.csv")
+
+
+pdf("final_plot.2.pdf", width=7.5, height=7.5)
+figure1 <- ggplot(data = all, aes(all$final.metric, all$interacting.genes),
+                  colour="red")  +
+  geom_point(alpha=0.4, size=1.5, colour="red") +
+  xlab("Scaled Jaccard ratios of pEK204 vs pEK499") +  
+  ylab("Number of genes interacting with pEK204 genes")+ theme_bw()+
+  geom_text_repel(data=all,aes(x = all$final.metric, y=all$interacting.genes,
+            label =species), size=3, point.padding = 0, min.segment.length = 0,
+                  box.padding = 0.5, hjust = 0)+
+  labs(colour="Number of pEK204-associated pil genes")+
+  annotate(geom="text", x=3.3, y=25, label="Relatively more", color="blue") + 
+   annotate(geom="text", x=3.3, y=1.5, label="pEK204-related genes",
+           color="blue") +
+  annotate(geom="text", x=-3.3, y=25, label="Relatively fewer", color="blue") + 
+   annotate(geom="text", x=-3.3, y=1.5, label="pEK204-related genes",
+           color="blue")
+#add marginal density histogram to the scatterplot
+ggExtra::ggMarginal(figure1, type = "histogram")
+dev.off()
+
+#####analyze pil genes in chromosomes
+#read in the list of chromosome with pil operons
+pil_list <- read.csv("list.pil.csv")
+#create a new column for chromosome names  
+pil_list$chrom <- gsub("_EU935740",  replacement="", pil_list$chrom)
+pil_list$Count <- rep(0,length(pil_list$chrom))
+for (i in 1:length(pil_list$chrom)){
+   pil_list$Count[i] <- length(grep("pil", pil_list[i,])) } 
+
+pp <- na.omit(pil_list[,c("chrom","Count")]) #341 samples
+#extract the chroms that are present in both "all" and "pp"
+set1 <- subset(all, chrom %in% pp$chrom)
+#316 samples #25 samples are not present in "all"
+#select the samples that are present in both "set1" and "pp"
+set2<- subset(pp, chrom %in% set1$chrom) #316 samples
+#sort the samples by samples name
+set1<- set1[order(set1$chrom),]
+set2<- set2[order(set2$chrom),] 
+#add the number of pil genes of each sample into set1
+set1 <- cbind(set1,set2$Count)
+#rename the column name
+names(set1)[names(set1) == "set2$Count"] <- "Count"
+
+#for the samples with no pil genes, set the number of pil genes as "0" 
+set3 <- subset(all, !(all$chrom %in% set1$chrom))
+set3$Count <- "0"
+com <- rbind(set1,set3)
+View(com)
+
+pil_count = as.numeric(com$Count)
+pointSize = as.numeric(com$Count)
+
+#modify the point size's ratio, based on the quantity of pil genes 
+sc <- c()
+for(i in 1:length(pointSize)){
+  if(pointSize[i] >= 10){ sc[i] <- "4"
+  } else if(10> pointSize[i] &  pointSize[i]>= 5){
+     sc[i] <- "2"
+  } else{ sc[i] <- "1"  }
+}
+pointSize = as.numeric(sc)
+
+#plot 
+pdf("final_plot.pdf", width=12, height=8)
+figure1 <- ggplot(data = com, aes(com$final.metric, com$interacting.genes,
+                                  colour= pil_count)) +
+  geom_point(alpha=0.4,size=pointSize) +
+  scale_colour_gradient(low = "steelblue", high = "red")+
+  xlab("Scaled Jaccard ratios of pEK204 vs pEK499") +  
+  ylab("Number of chromosomal genes interacting with pEK204 genes")+ # theme_bw()+
+  geom_text_repel(data=all,aes(x = all$final.metric, y=all$interacting.genes,
+            label =species), size=3, point.padding = 0, min.segment.length = 0,
+                  box.padding = 0.5, hjust = 0)+
+  labs(colour="Number of pEK204-associated pil genes", cex=0.8) +
+  annotate(geom="text", x=3.3, y=25, label="Relatively more", color="blue") + 
+   annotate(geom="text", x=3.3, y=1.5, label="pEK204-related genes",
+           color="blue") +
+  annotate(geom="text", x=-3.3, y=25, label="Relatively fewer", color="blue") + 
+   annotate(geom="text", x=-3.3, y=1.5, label="pEK204-related genes",
+           color="blue")  + theme(legend.position = "left") +
+  annotate(geom="text", x=-3.5, y=155, label="Fewer genes interacting",color="darkgreen") + 
+   annotate(geom="text", x=-3.5, y=135, label="with pEK204 genes",
+           color="darkgreen")  + theme(legend.position = "left") +
+  annotate(geom="text", x=-3.5, y=650, label="More genes interacting",color="darkgreen") + 
+   annotate(geom="text", x=-3.5, y=620, label="with pEK204 genes",
+           color="darkgreen")  + theme(legend.position = "left")
+#add marginal density histogram to the scatterplot
+ggExtra::ggMarginal(figure1, type = "histogram") 
+dev.off()

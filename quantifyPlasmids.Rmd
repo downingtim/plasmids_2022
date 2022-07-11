@@ -1,0 +1,1194 @@
+---
+title: "quantifyPlasmids"
+---
+
+## R Markdown
+
+```{r}
+library(readxl)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(grid)
+library(ggpubr)
+#install.packages("BacDive", repos="http://R-Forge.R-project.org")
+library(BacDive)
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  # Make a list from the ... arguments and plotlist
+    plots <- c(list(...), plotlist)
+    numPlots = length(plots)
+  # If layout is NULL, then use 'cols' to determine layout
+    if (is.null(layout)) { # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))}
+
+  if (numPlots==1) {    print(plots[[1]])  } 
+  else {     # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) { # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,layout.pos.col = matchidx$col)) }
+  }
+}
+
+####### pEK204, pEK499, etc #############
+file <- data.frame(read.csv("Table_S4_plasmids_species_pEK.csv")) # pEK204 & co
+# ID	Plasmid	Chrom	Genes	Interacting_genes	Total_Genes	%ofGenes	Interactions	Total_Interactions
+file <- file[,-c(1)]
+str(file) # 17702 obs. of  7 variables:
+file$Interacting_genes <- (as.numeric(file$Interacting_genes))
+file$Interactions <- (as.numeric(file$Interactions))
+file$Interacting_genes2 <- as.numeric(log10(file$Interacting_genes))
+file$Interactions2 <- as.numeric(log10(file$Interactions))
+file[] <- lapply(file, function(x) replace(x, x=="EU935740", "pEK204"))
+file[] <- lapply(file, function(x) replace(x, x=="EU935739", "pEK499"))
+file[] <- lapply(file, function(x) replace(x, x=="EU935738", "pEK516"))
+file[] <- lapply(file, function(x) replace(x, x=="NZ_HG941719.1", "pEC958"))
+str(file)
+
+file$Interacting_genes <- as.numeric(file$Interacting_genes)
+file$Interactions <- as.numeric(file$Interactions)
+new1 <- subset(file, Interacting_genes >10 & Interactions > 10) #3828
+new1$Interacting_genes2 <- as.numeric(new1$Interacting_genes2)
+new1$Interactions2 <- as.numeric(new1$Interactions2)
+str(new1)
+
+set1 <- as.data.frame(table(subset(file, Interacting_genes==0)$Chrom)) # samples 
+4426 - length(subset(set1, Freq >= 4)$Var1)
+# 1,604 = get freqs with no interacting genes for any plasmid
+set2 <- as.data.frame(table(subset(file, Interacting_genes>0)$Chrom)) # samples 
+length(subset(set2, Freq == 4)$Var1) # 745
+length(subset(set2, Freq == 3)$Var1) # 120
+length(subset(set2, Freq == 2)$Var1) # 216
+length(subset(set2, Freq == 1)$Var1) # 517
+
+set3 <- as.data.frame(table(subset(new1)$Chrom)) # samples 
+length((set3)$Var1) # 1,410
+length(subset(set3, Freq == 4)$Var1) # 683
+length(subset(set3, Freq == 3)$Var1) # 112
+length(subset(set3, Freq == 2)$Var1) # 145
+length(subset(set3, Freq == 1)$Var1) # 470
+
+p1 <- new1 %>% ggplot( aes(x=Plasmid, y=Interacting_genes2, fill=Plasmid)) +
+    geom_boxplot(aes(colour=Plasmid), outlier.colour=NA, alpha=0.2) +
+    geom_jitter(aes(colour=Plasmid), size=0.1, alpha=0.4)  +
+    ylab("Log10-scaled number of interacting genes per sample")
+p2 <- new1 %>% ggplot( aes(x=Plasmid, y=(Interactions2), fill=Plasmid)) +
+    geom_boxplot(aes(colour=Plasmid), outlier.colour=NA, alpha=0.2) +
+    geom_jitter(aes(colour=Plasmid), size=0.1, alpha=0.4)  +
+    ylab("Log10-scaled number of PPIs per sample")  
+p3 <- new1 %>% ggplot(aes(y= (Interactions), x=Interacting_genes,fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=0.4, alpha=0.25, show.legend=F) +
+    ylab("Number of PPIs per sample") +
+    xlab("Number of interacting genes per sample") + xlim(0,500) + ylim(0,1000)
+
+pdf(file="FIGURES_TABLES/Fig_S5_interacting_genes_pEK.pdf", width=9, height=5)
+ggarrange(p1, p2, ncol=2, nrow=1, labels = c("A", "B"))
+dev.off()
+pdf(file="FIGURES_TABLES/Fig_S8_correl_pEK.pdf", width=8, height=8)
+ggarrange(p3,  ncol=1, nrow=1)
+dev.off()
+
+c11 <- new1 %>% filter(Plasmid=="pEK204") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="darkgreen", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pEK204") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+c21 <- new1 %>% filter(Plasmid=="pEC958") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="red", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pEC958") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+c31 <- new1 %>% filter(Plasmid=="pEK499") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="cyan", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pEK499") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+c41 <- new1 %>% filter(Plasmid=="pEK516") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="purple", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pEK516") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+
+pdf(file="FIGURES_TABLES/Fig_S8_new_correl_pEK.pdf", width=8, height=8)
+ggarrange(c11, c21, c31, c41, ncol=2, nrow=2, labels = c("pEK204", "pEC958",
+           "pEK499", "pEK516"))
+dev.off()
+
+## 683 with all 4 plasmids
+str(new1)
+new12 <- data.frame(matrix(ncol=10))
+colnames(new12) = colnames(new1)
+new12 <- new12[-c(1),]
+set683 <- subset(set3, Freq == 4)$Var1  # 683
+str(set683)
+for (k in 1:length(new1$Chrom)){
+  for (k2 in 1:length(set683)){
+     if(new1$Chrom[k] == set683[k2]){ new12[length(new12$Chrom)+1,] <- new1[k,]}}}
+str(new12) # 2732 entries
+
+model_683 <- lm(new12$Interactions ~ (new12$Interacting_genes))
+new12$Interactions3 <- resid(model_683)
+new13 <- (subset(new12, (Interactions3 >100 & Interacting_genes>200)))
+str(new13) # 24 entries
+View(new13)
+# write.csv(new13, "FIGURES_TABLES/Table_S8.csv")
+length(subset(new13, Plasmid=="pEK204")$Plasmid)
+length(subset(new13, Plasmid=="pEK499")$Plasmid)
+length(subset(new13, Plasmid=="pEK516")$Plasmid)
+length(subset(new13, Plasmid=="pEC958")$Plasmid)
+unique(new13$Chrom[duplicated(new13$Chrom) | duplicated(new13$Chrom, fromLast=TRUE)])
+
+##
+PEK204_683 <- subset(new12, Plasmid=="pEK204")
+PEK499_683 <- subset(new12, Plasmid=="pEK499")
+PEK516_683 <- subset(new12, Plasmid=="pEK516")
+PEC958_683 <- subset(new12, Plasmid=="pEC958")
+
+summary(PEK204_683$Interacting_genes)[3]  # 72
+summary(subset(new12, Plasmid != "pEK204")$Interacting_genes)[3] # 69
+sd(PEK204_683$Interacting_genes)   # 91.3
+sd(subset(new12, Plasmid != "pEK204")$Interacting_genes) # 58.9
+
+summary(PEK204_683$Interactions)[3]  # 76
+summary(subset(new12, Plasmid != "pEK204")$Interactions)[3] # 72
+sqrt(sd(PEK204_683$Interactions))   # 14.1
+sqrt(sd(subset(new12, Plasmid != "pEK204")$Interactions)) # 8.6
+
+model_PEK204683 <- lm(PEK204_683$Interactions ~ (PEK204_683$Interacting_genes))
+PEK204_683$Interactions3 <- resid(model_PEK204683)
+plot(PEK204_683$Interactions3,PEK204_683$Interacting_genes) + grid()
+
+## LM ## ## ## ## ## ## ## ## ## ## ## ## ## 
+
+new1$Genes <- as.numeric(new1$Genes)
+new1$Total_Genes <- as.numeric(new1$Total_Genes)
+new1$Interacting_genes2 <- as.numeric(new1$Interacting_genes2)
+new1$Genes <- as.numeric(new1$Genes)
+new1$Jaccard <- as.numeric(new1$Jaccard)
+str(new1)
+
+cor.test(new1$Interacting_genes, new1$Interactions) # r=0.89
+cor.test(new1$Total_Genes, new1$Interactions) # r=0.24
+cor.test(new1$Genes, new1$Interactions) # r=0.14
+
+summary(lm(new1$Interactions2 ~ new1$Interacting_genes2 + new1$Genes + 
+             new1$Total_Genes + new1$Interacting_genes2*new1$Genes + 
+             new1$Genes*new1$Total_Genes + new1$Total_Genes*new1$Interacting_genes2))
+#                                           Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)                                 7.569e-02  4.477e-02   1.691    0.091 .  
+# new1$Interacting_genes2                   9.474e-01  2.666e-02  35.539  < 2e-16 ***
+# new1$Genes                               -3.363e-03  5.328e-04  -6.312 3.08e-10 ***
+# new1$Total_Genes                          6.115e-06  6.730e-06   0.909    0.364    
+# new1$Interacting_genes2:new1$Genes        2.242e-03  3.105e-04   7.223 6.12e-13 ***
+# new1$Genes:new1$Total_Genes              -5.985e-08  5.551e-08  -1.078    0.281    
+# new1$Interacting_genes2:new1$Total_Genes -6.350e-07  3.290e-06  -0.193    0.847  
+
+pset <- c(  0.091, 2e-16, 3.08e-010 , 0.364 , 6.12e-13, 0.281, 0.847 )
+p.adjust(c(  0.091, 2e-16, 3.08e-010 , 0.364 , 6.12e-13, 0.281, 0.847 )
+         , method="BH", 23)
+# 5.232500e-01 4.600000e-15 2.361333e-09 1.000000e+00 7.038000e-12 1.000000e+00 1.000
+
+summary(lm(new1$Interacting_genes2 ~ new1$Genes + new1$Total_Genes + 
+             new1$Genes*new1$Total_Genes))
+#                               Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)                 1.564e+00  4.571e-02  34.219  < 2e-16 ***
+# new1$Genes                  4.398e-04  6.446e-04   0.682 0.495119    
+# new1$Total_Genes            4.371e-05  1.220e-05   3.584 0.000343 ***
+# new1$Genes:new1$Total_Genes 2.569e-08  1.704e-07   0.151 0.880204  
+pset <- c(pset, 2e-16, 0.495119, 0.000343, 0.880204 )
+p.adjust(c(  2e-16, 0.495119, 0.000343, 0.880204 ), method="BH", 23)
+# 4.6000e-15 1.0000e+00 3.9445e-03 1.0000e+00
+##############
+
+PEK204 <- subset(new1, Plasmid=="pEK204")
+cor.test(PEK204$Interacting_genes, PEK204$Interactions) # r=0.915
+cor.test(PEK204$Total_Genes, PEK204$Interactions) # r=0.34
+str(PEK204) # 856
+#summary(lm(PEK204$Interactions2 ~ PEK204$Interacting_genes2)) # r2=0.895
+summary(lm(PEK204$Interactions2 ~ PEK204$Interacting_genes2 + PEK204$Total_Genes + 
+             PEK204$Interacting_genes2*PEK204$Total_Genes  ))
+# (Intercept)                                  -3.721e-01  6.962e-02  -5.344 1.17e-07 
+# PEK204$Interacting_genes2                     1.242e+00  3.986e-02  31.158  < 2e-16 
+# PEK204$Total_Genes                            1.649e-05  1.741e-05   0.947    0.344    
+# PEK204$Interacting_genes2:PEK204$Total_Genes -7.595e-06  9.441e-06  -0.804    0.421     
+pset <- c(pset, 1.17e-07, 2e-16, 0.344, 0.421  )
+p.adjust(c(  1.17e-07, 2e-16, 0.344, 0.421 ), method="BH", 23)
+# 1.3455e-06 4.6000e-15 1.0000e+00 1.0000e+00
+
+PEK499 <- subset(new1, Plasmid=="pEK499")
+cor.test(PEK499$Interacting_genes, PEK499$Interactions) # r=0.98
+cor.test(PEK499$Total_Genes, PEK499$Interactions) # r=0.18
+str(PEK499) # 1324
+summary(lm(PEK499$Interactions2 ~ PEK499$Interacting_genes2 + PEK499$Total_Genes + 
+             PEK499$Interacting_genes2*PEK499$Total_Genes ))
+# (Intercept)                           -1.166e-01  2.163e-02  -5.392 8.26e-08 ***
+# PEK499$Interacting_genes2                     1.074e+00  1.238e-02  86.771  < 2e-16 ***
+# PEK499$Total_Genes                            1.071e-06  5.207e-06   0.206    0.837    
+# PEK499$Interacting_genes2:PEK499$Total_Genes -1.723e-06  2.921e-06  -0.590    0.556    
+pset <- c(pset, 8.26e-08, 2e-16, 0.837, 0.556  )
+p.adjust(c( 8.26e-08, 2e-16, 0.837, 0.556  ), method="BH", 23)
+# 9.499e-07 4.600e-15 1.000e+00 1.000e+00
+
+PEK516 <- subset(new1, Plasmid=="pEK516")
+cor.test(PEK516$Interacting_genes, PEK516$Interactions) # r=0.96
+cor.test(PEK516$Total_Genes, PEK516$Interactions) # r=0.32
+str(PEK516) # 852
+summary(lm(PEK516$Interactions2 ~ PEK516$Interacting_genes2 + PEK516$Total_Genes + 
+             PEK516$Interacting_genes2*PEK516$Total_Genes  ))
+# (Intercept)                                  -1.023e-01  3.342e-02  -3.061  0.00227 ** 
+# PEK516$Interacting_genes2                     1.065e+00  1.955e-02  54.469  < 2e-16 ***
+# PEK516$Total_Genes                            8.948e-06  8.247e-06   1.085  0.27826    
+# PEK516$Interacting_genes2:PEK516$Total_Genes -5.447e-06  4.660e-06  -1.169  0.24276   
+pset <- c(pset, 0.00227, 2e-16, 0.27826, 0.24276  )
+p.adjust(c( 0.00227, 2e-16, 0.27826, 0.24276   ), method="BH", 23)
+# 2.6105e-02 4.6000e-15 1.0000e+00 1.0000e+00
+
+PEC958 <- subset(new1, Plasmid=="pEC958")
+cor.test(PEC958$Interacting_genes, PEC958$Interactions) # r=0.84
+cor.test(PEC958$Total_Genes, PEC958$Interactions) # r=0.30
+str(PEC958) # 796
+summary(lm(PEC958$Interactions2 ~ PEC958$Interacting_genes2 + PEC958$Total_Genes + 
+              PEC958$Interacting_genes2*PEC958$Total_Genes ))
+# (Intercept)                               -1.443e-01  6.318e-02  -2.284   0.0226 *  
+# PEC958$Interacting_genes2                     1.091e+00  3.772e-02  28.933   <2e-16 ***
+# PEC958$Total_Genes                            1.040e-05  1.505e-05   0.691   0.4897    
+# PEC958$Interacting_genes2:PEC958$Total_Genes -3.754e-06  8.720e-06  -0.430   0.6670    
+
+pset <- c(pset, 0.0226, 2e-16, 0.4897 ,0.6670 )
+p.adjust(c( 0.0226, 2e-16, 0.4897 ,0.6670  ), method="BH", 23)
+# 2.599e-01 4.600e-15 1.000e+00 1.000e+00
+p.adjust(pset, method="BH")
+
+summary(PEK204$Interacting_genes)[3]  # 64
+summary(subset(new1, Plasmid != "pEK204")$Interacting_genes)[3] # 54
+summary(PEK499$Interacting_genes)[3]  # 52
+summary(PEK516$Interacting_genes)[3]  # 57
+summary(PEC958$Interacting_genes)[3]  # 55
+sd(PEK204$Interacting_genes)   # 88
+sd(subset(new1, Plasmid != "pEK204")$Interacting_genes) # 56.1
+sd(PEK499$Interacting_genes)   # 66
+sd(PEK516$Interacting_genes)   # 51.7
+sd(PEC958$Interacting_genes)   # 41.4
+
+summary(PEK204$Interactions)[3]  # 68
+summary(subset(new1, Plasmid != "pEK204")$Interactions)[3] # 55
+summary(PEK499$Interactions)[3]  # 52
+summary(PEK516$Interactions)[3]  # 58
+summary(PEC958$Interactions)[3]  # 56
+sd(PEK204$Interactions)   # 190.5
+sd(subset(new1, Plasmid != "pEK204")$Interactions) # 67.9
+sd(PEK499$Interactions)   # 75.7
+sd(PEK516$Interactions)   # 57.1
+sd(PEC958$Interactions)   # 64.9
+
+# get expected PPI rate ########################
+
+# PEK204 # I am repeating code here but it is more clear to do so
+model_PEK204 <- lm(PEK204$Interactions ~ PEK204$Interacting_genes + PEK204$Total_Genes)
+PEK204$Exp_PPIs <- model_PEK204$coefficients[3]*PEK204$Total_Genes + 
+  model_PEK204$coefficients[1] +  model_PEK204$coefficients[2]*PEK204$Interacting_genes 
+str(PEK204$Exp_PPIs) # 1820
+summary(PEK204$Interactions)
+summary(PEK204$Exp_PPIs)
+# get deviation of obs from exp scaled by values to get % excess (+ve) or deficit (-ve)
+PEK204$Excess <- round((PEK204$Interactions - PEK204$Exp_PPIs)/(PEK204$Interactions),3)
+hist(PEK204$Interactions, breaks=66) + grid()
+hist(PEK204$Exp_PPIs, breaks=66) + grid()
+hist( (PEK204$Excess), breaks=66) + grid()
+
+# PEK499
+model_PEK499 <- lm(PEK499$Interactions ~ PEK499$Interacting_genes + PEK499$Total_Genes)
+PEK499$Exp_PPIs <- model_PEK499$coefficients[3]*PEK499$Total_Genes + 
+  model_PEK499$coefficients[1] +  model_PEK499$coefficients[2]*PEK499$Interacting_genes 
+str(PEK499$Exp_PPIs) # 1868
+summary(PEK499$Interactions)
+summary(PEK499$Exp_PPIs)
+PEK499$Excess <- round((PEK499$Interactions - PEK499$Exp_PPIs)/(PEK499$Interactions),3)
+hist(PEK499$Interactions, breaks=66) + grid()
+hist(PEK499$Exp_PPIs, breaks=66) + grid()
+hist( (PEK499$Excess), breaks=66) + grid()
+
+# PEK516
+model_PEK516 <- lm(PEK516$Interactions ~ PEK516$Interacting_genes +
+                     PEK516$Total_Genes)
+PEK516$Exp_PPIs <- model_PEK516$coefficients[3]*PEK516$Total_Genes + 
+                        model_PEK516$coefficients[1] + 
+                        model_PEK516$coefficients[2]*PEK516$Interacting_genes 
+str(PEK516$Exp_PPIs) # 673
+summary(PEK516$Interactions)
+summary(PEK516$Exp_PPIs)
+PEK516$Excess <- round((PEK516$Interactions -
+                               PEK516$Exp_PPIs)/(PEK516$Interactions),3)
+hist(PEK516$Interactions, breaks=66) + grid()
+hist(PEK516$Exp_PPIs, breaks=66) + grid()
+hist( (PEK516$Excess), breaks=66) + grid()
+
+# PEC958
+model_PEC958 <- lm(PEC958$Interactions ~ PEC958$Interacting_genes +
+                     PEC958$Total_Genes)
+PEC958$Exp_PPIs <- model_PEC958$coefficients[3]*PEC958$Total_Genes + 
+                        model_PEC958$coefficients[1] + 
+                        model_PEC958$coefficients[2]*PEC958$Interacting_genes 
+str(PEC958$Exp_PPIs) # 1820
+summary(PEC958$Interactions)
+summary(PEC958$Exp_PPIs)
+PEC958$Excess <- round((PEC958$Interactions -
+                               PEC958$Exp_PPIs)/(PEC958$Interactions),3)
+hist(PEC958$Interactions, breaks=66) + grid()
+hist(PEC958$Exp_PPIs, breaks=66) + grid()
+hist( (PEC958$Excess), breaks=66) + grid()
+
+subset(PEK204, Interacting_genes > 500)
+subset(PEK499, Interacting_genes > 450)
+subset(PEK516, Interacting_genes > 420)
+subset(PEC958, Interacting_genes > 350)
+
+k1 <- PEK204 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    geom_point(aes(colour=Interactions), size=PEK204$Interactions/200, alpha=0.4) + 
+    scale_color_gradient2(mid="lightgreen", high="darkgreen", midpoint=400) +
+    theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) + 
+    ggtitle("pEK204")+  theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pEK204 pair") + ylim(-0.5,0.8)+
+    xlab("pEK204-interacting genes per sample") + xlim(0,665) 
+k2 <- PEK499 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    geom_point(aes(colour=Interactions), size=PEK499$Interactions/200, alpha=0.4) + 
+    scale_color_gradient2(mid="lightblue", high="darkblue", midpoint=300) +
+      theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) + 
+    ggtitle("pEK499") + theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pEK499 pair") +  ylim(-0.5,0.8)+
+    xlab("pEK499-interacting genes per sample") + xlim(0,665) 
+k3 <- PEK516 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    scale_color_gradient2(mid="pink", high="purple", midpoint=200) +
+    geom_point(aes(colour=Interactions), size=PEK516$Interactions/200, alpha=0.4) + 
+      theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) + 
+    ggtitle("pEK516") + theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pEK516 pair") + ylim(-0.5,0.8)+
+    xlab("pEK516-interacting genes per sample") + xlim(0,665)  
+k4 <- PEC958 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    scale_color_gradient2(mid="orange", high="darkred", midpoint=200) +
+    geom_point(aes(colour=Interactions), size=PEC958$Interactions/200, alpha=0.4) + 
+      theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) + 
+    ggtitle("pEC958") + theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pEC958 pair") + ylim(-0.5,0.8)+
+    xlab("pEC958-interacting genes per sample") + xlim(0,665)  
+
+pdf(file="FIGURES_TABLES/Fig_3_pEK_excessPPIs.pdf", width=8, height=8)
+ggarrange(k1, k2, k3, k4, ncol=2, nrow=2, labels = c("A", "B", "C", "D"))
+dev.off()
+
+# all 
+write.csv(subset(PEK204, Excess>0.2 & Interactions>100 &
+                    Interacting_genes>100), "Table_S8.csv") # 11 v 1820
+write.table(subset(PEK499, Excess>0.2 & Interactions>100 &
+             Interacting_genes>100), append = T, "Table_S8.csv") # 18 out of 1868
+write.table(subset(PEK516, Excess>0.2 & Interactions>100 &
+             Interacting_genes>100), append = T, "Table_S8.csv") # 2 v 673 
+write.table(subset(PEC958, Excess>0.2 & Interactions>100 &
+             Interacting_genes>100), append = T, "Table_S8.csv") # 0 v 1820
+
+ ######################## ######################## ######################## ########
+
+model_PEK204 <- lm(PEK204$Interactions ~ (PEK204$Interacting_genes))
+PEK204$Interactions3 <- resid(model_PEK204)
+a11 <- PEK204 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend =F, col="darkgreen") +
+    xlab("Residuals of pEK204 PPIs per sample") + ylim(0,700)+
+    ylab("Number of pEK204-interacting genes per sample")  + xlim(-550,550)
+model_PEK499 <- lm(PEK499$Interactions ~ PEK499$Interacting_genes)
+PEK499$Interactions3 <- resid(model_PEK499)
+a12 <- PEK499 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend=F, col="darkcyan")+
+    xlab("Residuals of pEK499 PPIs per sample") +  ylim(0,700)+ 
+    ylab("Number of pEK499-interacting genes per sample")   + xlim(-550,550)
+model_PEK516 <- lm(PEK516$Interactions ~ PEK516$Interacting_genes)
+PEK516$Interactions3 <- resid(model_PEK516)
+a13 <- PEK516 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend =F, col="purple") +
+    xlab("Residuals of pEK516 PPIs per sample") +  ylim(0,700)+
+    ylab("Number of pEK516-interacting genes per sample")     + xlim(-550,550)
+model_PEC958 <- lm(PEC958$Interactions ~ PEC958$Interacting_genes)
+PEC958$Interactions3 <- resid(model_PEC958)
+a14 <- PEC958 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend =F, col="red") +
+    xlab("Residuals of pEC958 PPIs per sample") +    ylim(0,700)+
+    ylab("Number of pEC958-interacting genes per sample")    + xlim(-550,550)
+
+a11new <- ggExtra::ggMarginal(a11, type="densigram", size=6, colour="grey", bins=50)
+a12new <- ggExtra::ggMarginal(a12, type="densigram", size=6, colour="grey", bins=50)
+a13new <- ggExtra::ggMarginal(a13, type="densigram", size=6, colour="grey", bins=50)
+a14new <- ggExtra::ggMarginal(a14, type="densigram", size=6, colour="grey", bins=50)
+pdf(file="FIGURES_TABLES/Fig_S6_pEK_interacting_genes.pdf", width=9, height=10)
+ggarrange(a11new, a12new, a13new, a14new, ncol=2, nrow=2, labels = c("A", "B", "C", "D"))
+dev.off()
+ 
+ ############# ############# ############# ############# #############
+# pOXA-48
+# ID	Plasmid	Chrom	Genes	  Interacting_genes	Interactions	Total_Genes	Total_Interactions
+# 1	JN626286.1	Pseudomonas_aeruginosa_	37	350	   438	        6299	   131860
+
+file2 <- data.frame(read.csv("Table_S3_plasmids_species_pOXA48.csv")) # pOXA-48 & co
+file2 <- file2[,-c(1)]
+file2[] <- lapply(file2, function(x) replace(x, x=="JN626286.1", "pOXA-48"))
+file2[] <- lapply(file2, function(x) replace(x, x=="LN864819.1", "pKP112"))
+file2[] <- lapply(file2, function(x) replace(x, x=="NZ_KX523901.1", "pOXA-48_30715"))
+file2[] <- lapply(file2, function(x) replace(x, x=="MT441554.1", "pOXA-48_k8"))
+str(file2) # ?? obs. of  7 variables:
+file2$Interacting_genes <- as.numeric(file2$Interacting_genes)
+file2$Interactions <- as.numeric(file2$Interactions)
+file2$Interacting_genes2 <- as.numeric(log10(file2$Interacting_genes))
+file2$Interacting_genes2[file2$Interacting_genes2 == "-Inf"] <- 0
+file2$Interacting_genes2 <- as.numeric(file2$Interacting_genes2)
+file2$Interactions2 <- as.numeric(log10(file2$Interactions))
+file2$Interactions2[file2$Interactions2 == "-Inf"] <- 0
+file2$Interactions2 <- as.numeric(file2$Interactions2)
+str(file2)
+
+set21 <- as.data.frame(table(subset(file2, Interacting_genes==0)$Chrom)) # samples 
+4426 - length(subset(set21, Freq >= 4)$Var1)
+# 2405 = get freqs with no interacting genes for any plasmid
+set22 <- as.data.frame(table(subset(file2, Interacting_genes>0)$Chrom)) # samples 
+length(subset(set22, Freq == 4)$Var1) # 681
+length(subset(set22, Freq == 3)$Var1) # 734
+length(subset(set22, Freq == 2)$Var1) # 494
+length(subset(set22, Freq == 1)$Var1) # 487
+
+new2 <- file2[file2$Interacting_genes >10 & file2$Interactions >10, ] # 6181 entries
+str(new2)
+
+set33 <- as.data.frame(table(subset(new2)$Chrom)) # samples 
+length((set33)$Var1) # 2319
+
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+                "#0072B2", "#D55E00", "#CC79A7")
+  
+a1 <- new2 %>% ggplot( aes(x=Plasmid, y=Interacting_genes2, fill=Plasmid)) +
+     geom_violin(aes(colour=Plasmid), draw_quantiles=T, alpha=0.2) +  
+   geom_jitter(aes(colour=Plasmid), size=0.1, alpha=0.4, shape=11) +
+    ylab("Log10-scaled number of interacting genes per sample") + 
+    scale_fill_manual(values=c("#CC6666", "#9999CC", "#66CC99", "#000000"))+
+     theme(axis.text.x = element_text(angle = 90))
+a2 <- new2 %>% ggplot( aes(x=Plasmid, y=(Interactions2), fill=Plasmid)) +
+     geom_violin(aes(colour=Plasmid), draw_quantiles=T, alpha=0.2) +  
+    geom_jitter(aes(colour=Plasmid), size=0.1, alpha=0.4, shape=11, show.legend=F)  +
+    ylab("Log10-scaled number of PPIs per sample")   + 
+    scale_fill_manual(values=c("#CC6666", "#9999CC", "#66CC99", "#000000")) +
+     theme(axis.text.x = element_text(angle = 90))
+a3 <- new2 %>% ggplot(aes(y=(Interactions2), x=Interacting_genes2, fill=Plasmid))+
+    geom_jitter(aes(colour=Plasmid), size=0.4, alpha=0.25, shape=11, show.legend=F) +
+    ylab("Log10-scaled number of PPIs per sample") +
+    xlab("Log10-scaled number of interacting genes per sample") +
+    xlim(1,3) + ylim(1,3) + 
+    scale_fill_manual(values=c("#CC6666", "#9999CC", "#66CC99", "#000000"))
+
+pdf(file="FIGURES_TABLES/Fig_S3_interacting_genes_pOXA48.pdf", width=9, height=5.5)
+ggarrange(a1, a2, ncol=2, nrow=1, labels = c("A", "B"))
+dev.off()
+pdf(file="FIGURES_TABLES/Fig_S7_correl_pOXA48.pdf", width=8, height=8)
+ggarrange(a3,  ncol=1, nrow=1)
+dev.off()
+
+c1 <- new2 %>% filter(Plasmid=="pOXA-48") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="darkgreen", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pOXA-48") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+c2 <- new2 %>% filter(Plasmid=="pKP112") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="red", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pKP112") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+c3 <- new2 %>% filter(Plasmid=="pOXA-48_30715") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="cyan", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pOXA-48_30715") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+c4 <- new2 %>% filter(Plasmid=="pOXA-48_k8") %>%  # 
+    ggplot(aes(y=(Interactions2), x=Interacting_genes2))+
+    geom_point(  colour="purple", size=0.2, alpha=0.2, shape=11, show.legend=F) +
+    ylab("Log10-scaled PPIs per sample - pOXA-48_k8") + xlim(1,2.7) +
+    xlab("Log10-scaled interacting genes per sample") + ylim(1,2.9)  
+
+pdf(file="FIGURES_TABLES/Fig_S7_new_correl_pOXA48.pdf", width=8, height=8)
+ggarrange(c1, c2, c3, c4, ncol=2, nrow=2, labels = c("pOXA-48", "pKP112",
+           "pOXA-48_30715", "pOXA-48_k8"))
+dev.off()
+
+## LM
+
+new2$Genes <- as.numeric(new2$Genes)
+new2$Total_Genes <- as.numeric(new2$Total_Genes)
+str(new2) # 6181
+summary(lm(new2$Interactions2 ~ new2$Interacting_genes2))
+# PPIs = 1.084(Interacting_genes2) - 0.128
+# adj_r2 = 0.976 p<2e-16,  
+
+summary(lm(new2$Interactions2 ~ new2$Interacting_genes2 + new2$Genes + 
+             new2$Total_Genes + new2$Interacting_genes2*new2$Genes + 
+             new2$Genes*new2$Total_Genes + new2$Total_Genes*new2$Interacting_genes2))
+# (Intercept)                              -9.576e-02  1.199e-02  -7.984 1.68e-15 ***
+# new2$Interacting_genes2                   1.055e+00  7.379e-03 142.992  < 2e-16 ***
+# new2$Genes                               -6.731e-04  2.191e-04  -3.072  0.00214 ** 
+# new2$Total_Genes                          1.599e-07  2.316e-06   0.069  0.94496    
+# new2$Interacting_genes2:new2$Genes        7.769e-04  1.269e-04   6.121 9.87e-10 ***
+# new2$Genes:new2$Total_Genes              -3.294e-08  2.252e-08  -1.463  0.14361    
+# new2$Interacting_genes2:new2$Total_Genes -5.096e-07  1.367e-06  -0.373  0.70938   
+pset2 <- c(1.68e-15, 2e-16,  0.00214, 0.94496 , 9.87e-10, 0.14361, 0.70938)
+p.adjust(c(1.68e-15, 2e-16,  0.00214, 0.94496 , 9.87e-10, 0.14361, 0.70938),
+         method="BH", 23)
+# 1.93200e-14 4.60000e-15 1.23050e-02 1.00000e+00 7.56700e-09 6.60606e-01 1.00000e+00
+
+summary(lm(new2$Interacting_genes2 ~ new2$Genes + new2$Total_Genes + 
+             new2$Genes*new2$Total_Genes))
+# (Intercept)                 1.531e+00  1.962e-02  78.006  < 2e-16 ***
+# new2$Genes                  1.380e-03  5.192e-04   2.658  0.00787 ** 
+# new2$Total_Genes            8.079e-06  5.115e-06   1.580  0.11427    
+# new2$Genes:new2$Total_Genes 1.110e-07  1.332e-07   0.833  0.40474    
+# pset2 <- c(pset2, 2e-16, 0.00787, 0.11427,  0.40474 )
+
+cor.test(new2$Interacting_genes2, new2$Genes ) # r=0.108
+cor.test(new2$Interacting_genes2, new2$Genes )$p.value # p=2.243286e-17
+cor.test(new2$Interacting_genes2, new2$Total_Genes ) # r=0.073
+cor.test(new2$Interacting_genes2, new2$Total_Genes )$p.value # p=1.08128e-08
+
+##############
+
+pOXA48 <- subset(new2, Plasmid=="pOXA-48") # JN626286.1
+cor.test(pOXA48$Interacting_genes, pOXA48$Interactions) # r=0.96
+cor.test(pOXA48$Total_Genes, pOXA48$Interactions) # r=0.11
+str(pOXA48) # 1820
+summary(lm(pOXA48$Interactions2 ~ pOXA48$Interacting_genes2 + pOXA48$Total_Genes
+           + pOXA48$Interacting_genes2*pOXA48$Total_Genes ))
+# (Intercept)                               -1.349e-01  2.142e-02  -6.300 3.73e-10 
+# pOXA48$Interacting_genes2                  1.099e+00  1.298e-02  84.688  < 2e-16 
+# pOXA48$Total_Genes                         -2.555e-06  5.078e-06  -0.503    0.615 
+# pOXA48$Interacting_genes2:pOXA48$Total_Genes -5.399e-08  3.044e-06  -0.018  0.986 
+pset2 <- c(pset2,  3.73e-10 , 2e-16, 0.615, 0.986  )
+p.adjust(c(3.73e-10 , 2e-16, 0.615, 0.986  ),method="BH", 23)
+# 4.2895e-09 4.6000e-15 1.0000e+00 1.0000e+00
+
+pKP112 <- subset(new2, Plasmid=="pKP112")  # LN864819.1
+cor.test(pKP112$Interacting_genes, pKP112$Interactions) # r=0.96
+cor.test(pKP112$Total_Genes, pKP112$Interactions) # r=0.13
+str(pKP112) # 973
+summary(lm(pKP112$Interactions2 ~ pKP112$Interacting_genes2 +  
+             pKP112$Total_Genes + pKP112$Interacting_genes2*pKP112$Total_Genes ))
+# (Intercept)                           -1.101e-01  2.018e-02  -5.456 5.52e-08 ***
+# pKP112$Interacting_genes2              1.082e+00  1.199e-02  90.226  < 2e-16 ***
+# pKP112$Total_Genes                      -6.026e-06  4.788e-06  -1.259    0.208    
+# pKP112$Interacting_genes2:pKP112$Total_Genes  2.244e-06  2.811e-06   0.798    0.425
+pset2 <- c(pset2, 5.52e-08, 2e-16, 0.208  , 0.425  )
+p.adjust(c(5.52e-08, 2e-16, 0.208  , 0.425 ),method="BH", 23)
+# 6.348e-07 4.600e-15 1.000e+00 1.000e+00
+
+pOXA4830715 <- subset(new2, Plasmid=="pOXA-48_30715") # NZ_KX523901.1
+cor.test(pOXA4830715$Interacting_genes, pOXA4830715$Interactions) # r=0.96
+cor.test(pOXA4830715$Total_Genes, pOXA4830715$Interactions) # r=0.38
+str(pOXA4830715) # 673
+summary(lm(pOXA4830715$Interactions2 ~ pOXA4830715$Interacting_genes2 +
+             pOXA4830715$Total_Genes + 
+             pOXA4830715$Interacting_genes2*pOXA4830715$Total_Genes ))
+# (Intercept)                         -1.180e-01  2.993e-02  -3.942 8.93e-05
+# pOXA4830715$Interacting_genes2      1.072e+00  1.781e-02  60.179  < 2e-16 ***
+# pOXA4830715$Total_Genes             1.510e-05  8.242e-06   1.832   0.0674 .  
+# pOXA4830715$Interacting_genes2:pOXA4830715$Total_Genes -9.2e-06 4.7e-06 -1.94 0.0533
+pset2 <- c(pset2, 8.93e-05, 2e-16,  0.0674,  0.0533)
+p.adjust(c(8.93e-05, 2e-16,  0.0674,  0.0533),method="BH", 23)
+# 1.02695e-03 4.60000e-15 3.87550e-01 3.87550e-01
+
+pOXA48k8 <- subset(new2, Plasmid=="pOXA-48_k8") # MT441554
+cor.test(pOXA48k8$Interacting_genes, pOXA48k8$Interactions) # r=0.995
+cor.test(pOXA48k8$Total_Genes, pOXA48k8$Interactions) # r=0.085
+str(pOXA48k8) # 1820
+summary(lm(pOXA48k8$Interactions2 ~ pOXA48k8$Interacting_genes2 +
+        pOXA48k8$Total_Genes + pOXA48k8$Interacting_genes2*pOXA48k8$Total_Genes ))
+# (Intercept)                                   -1.151e-01  6.651e-03 -17.303  < 2e-16
+# pOXA48k8$Interacting_genes2                     1.071e+00  4.255e-03 251.626  < 2e-16
+# pOXA48k8$Total_Genes                            4.027e-06  1.586e-06   2.539  0.01120
+# pOXA48k8$Interacting_genes2:pOXA48k8$Total_Genes -3.15e-06  1e-06  -3.13  0.00178
+pset2 <- c(pset2, 2e-16, 2e-16, 0.01120,  0.00178  )
+p.adjust(c( 2e-16, 2e-16, 0.01120,  0.00178),method="BH", 23)
+# 2.300000e-15 2.300000e-15 6.440000e-02 1.364667e-02
+
+str(pset2) # 23 # p.adjust(pset2, method="BH", 23) # 
+
+summary(pOXA48$Interacting_genes)[3]  # 35
+summary(pKP112$Interacting_genes)[3]  # 39
+summary(pOXA4830715$Interacting_genes)[3]  # 53
+summary(pOXA48k8$Interacting_genes)[3]  # 30
+sd(pOXA48$Interacting_genes)   # 45.0
+sd(pKP112$Interacting_genes)   # 51.9
+sd(pOXA4830715$Interacting_genes)   # 23.4
+sd(pOXA48k8$Interacting_genes)   # 32.5
+
+summary(pOXA48$Interactions)[3]  # 37
+summary(pKP112$Interactions)[3]  # 43
+summary(pOXA4830715$Interactions)[3]  # 53
+summary(pOXA48k8$Interactions)[3]  # 31
+sd(pOXA48$Interactions)   # 57.5
+sd(pKP112$Interactions)   # 64.9
+sd(pOXA4830715$Interactions)   # 26.4
+sd(pOXA48k8$Interactions)   # 36.5
+
+##
+set333 <- as.data.frame(table(subset(new2)$Chrom)) # samples 
+str(new2)
+new122 <- data.frame(matrix(ncol=10))
+colnames(new122) = colnames(new2)
+new122 <- new122[-c(1),]
+set650 <- subset(set333, Freq == 4)$Var1  # 650
+str(set650)
+for (k in 1:length(new2$Chrom)){
+  for (k2 in 1:length(set650)){
+     if(new2$Chrom[k] == set650[k2]){ new122[length(new122$Chrom)+1,] <- new2[k,]}}}
+str(new122) # 2600 entries
+
+model_650 <- lm(new122$Interactions ~ (new122$Interacting_genes))
+new122$Interactions3 <- resid(model_650)
+new133 <- (subset(new122, (Interactions3 >100 & Interacting_genes>150)))
+str(new133) # 24 entries
+View(new133)
+write.csv(new133, "FIGURES_TABLES/Table_S7_pOXA48.csv")
+length(subset(new133, Plasmid=="pOXA-48")$Plasmid)
+length(subset(new133, Plasmid=="pKP112")$Plasmid)
+length(subset(new133, Plasmid=="pOXA-48_30715")$Plasmid)
+length(subset(new133, Plasmid=="pOXA-48_k8")$Plasmid)
+unique(new133$Chrom[duplicated(new133$Chrom) | duplicated(new133$Chrom, fromLast=TRUE)])
+
+# get expected PPI rate ########################
+
+# pOXA-48 # I am repeating code here but it is more clear to do so
+model_pOXA48 <- lm(pOXA48$Interactions ~ pOXA48$Interacting_genes + pOXA48$Total_Genes)
+pOXA48$Exp_PPIs <- model_pOXA48$coefficients[3]*pOXA48$Total_Genes + 
+  model_pOXA48$coefficients[1] +  model_pOXA48$coefficients[2]*pOXA48$Interacting_genes 
+str(pOXA48$Exp_PPIs) # 1820
+summary(pOXA48$Interactions)
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  11.00   25.00   36.00   60.87   78.00  503.00 
+summary(pOXA48$Exp_PPIs)
+#   8.585  25.618  36.450  60.865  81.830 435.250 # distributions are equivalent
+# get deviation of obs from exp scaled by values to get % excess (+ve) or deficit (-ve)
+pOXA48$Excess <- round((pOXA48$Interactions - pOXA48$Exp_PPIs)/(pOXA48$Exp_PPIs),3)
+hist(pOXA48$Interactions, breaks=66) + grid()
+hist(pOXA48$Exp_PPIs, breaks=66) + grid()
+hist( (pOXA48$Excess), breaks=66) + grid()
+
+# pKP112
+model_pKP112 <- lm(pKP112$Interactions ~ pKP112$Interacting_genes + pKP112$Total_Genes)
+pKP112$Exp_PPIs <- model_pKP112$coefficients[3]*pKP112$Total_Genes + 
+  model_pKP112$coefficients[1] +  model_pKP112$coefficients[2]*pKP112$Interacting_genes 
+str(pKP112$Exp_PPIs) # 1868
+summary(pKP112$Interactions)
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  11.00   26.00   41.00   68.05   90.25  684.00 
+summary(pKP112$Exp_PPIs)
+#   8.234  26.323  41.164  68.045  93.232 539.744 # distributions are equivalent
+pKP112$Excess <- round((pKP112$Interactions - pKP112$Exp_PPIs)/(pKP112$Exp_PPIs),3)
+hist(pKP112$Interactions, breaks=66) + grid()
+hist(pKP112$Exp_PPIs, breaks=66) + grid()
+hist( (pKP112$Excess), breaks=66) + grid()
+
+# pOXA4830715
+model_pOXA4830715 <- lm(pOXA4830715$Interactions ~ pOXA4830715$Interacting_genes +
+                     pOXA4830715$Total_Genes)
+pOXA4830715$Exp_PPIs <- model_pOXA4830715$coefficients[3]*pOXA4830715$Total_Genes + 
+                        model_pOXA4830715$coefficients[1] + 
+                        model_pOXA4830715$coefficients[2]*pOXA4830715$Interacting_genes 
+str(pOXA4830715$Exp_PPIs) # 673
+summary(pOXA4830715$Interactions)
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  11.0    38.0    52.0    56.4    72.0   193.0 
+summary(pOXA4830715$Exp_PPIs)
+#   8.234  26.323  41.164  68.045  93.232 539.744 # distributions are equivalent
+pOXA4830715$Excess <- round((pOXA4830715$Interactions -
+                               pOXA4830715$Exp_PPIs)/(pOXA4830715$Exp_PPIs),3)
+hist(pOXA4830715$Interactions, breaks=66) + grid()
+hist(pOXA4830715$Exp_PPIs, breaks=66) + grid()
+hist( (pOXA4830715$Excess), breaks=66) + grid()
+
+# pOXA4830715
+model_pOXA48k8 <- lm(pOXA48k8$Interactions ~ pOXA48k8$Interacting_genes +
+                     pOXA48k8$Total_Genes)
+pOXA48k8$Exp_PPIs <- model_pOXA48k8$coefficients[3]*pOXA48k8$Total_Genes + 
+                        model_pOXA48k8$coefficients[1] + 
+                        model_pOXA48k8$coefficients[2]*pOXA48k8$Interacting_genes 
+str(pOXA48k8$Exp_PPIs) # 1820
+summary(pOXA48k8$Interactions)
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  11.00   20.00   29.00   43.27   56.00  239.00
+summary(pOXA48k8$Exp_PPIs)
+#   9.762  19.539  29.333  43.269  57.138 247.347 # distributions are equivalent
+pOXA48k8$Excess <- round((pOXA48k8$Interactions -
+                               pOXA48k8$Exp_PPIs)/(pOXA48k8$Exp_PPIs),3)
+hist(pOXA48k8$Interactions, breaks=66) + grid()
+hist(pOXA48k8$Exp_PPIs, breaks=66) + grid()
+hist( (pOXA48k8$Excess), breaks=66) + grid()
+
+plot(pOXA48$Interacting_genes, pOXA48$Excess) + grid()
+plot(pOXA48$Interactions, pOXA48$Excess) + grid()
+
+library(ggrepel)
+
+subset(PEK204, Interacting_genes>550 & Excess > 0)
+
+q1 <- pOXA48 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    geom_point(aes(colour=Interactions), size=1, alpha=0.4) +ggtitle("pOXA-48")+
+  theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pOXA-48 pair") +  ylim(-0.2,0.8)+
+    xlab("pOXA-48-interacting genes per sample") + xlim(0,460)  +
+    scale_color_gradient2(mid="green", high="darkgreen", midpoint=400) +
+    geom_point(aes(colour=Interactions), size=pOXA48$Interactions/200, alpha=0.4) + 
+    theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) 
+q2 <- pKP112 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    geom_point(aes(colour=Interactions), size=1, alpha=0.4) +ggtitle("pKP112")+
+  theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pKP112 pair") +  ylim(-0.2,0.8)+
+    xlab("pKP112-interacting genes per sample")   + xlim(0,460) + 
+    scale_color_gradient2(mid="red", high="yellow", midpoint=200) +
+    geom_point(aes(colour=Interactions), size=pKP112$Interactions/200, alpha=0.4) + 
+    theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) 
+q3 <- pOXA4830715 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    geom_point(aes(colour=Interactions), size=1, alpha=0.4)+ggtitle("pOXA-48_30715")+
+  theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pOXA-48_30715 pair") +  ylim(-0.2,0.8)+
+    xlab("pOXA-48_30715-interacting genes per sample")   + xlim(0,460) +
+    scale_color_gradient2(mid="lightblue", high="darkblue", midpoint=100) +
+    geom_point(aes(colour=Interactions), size=pOXA4830715$Interactions/200, alpha=0.4) + 
+    theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) 
+q4 <- pOXA48k8 %>% ggplot(aes(x=Interacting_genes, y=Excess))+
+    geom_point(aes(colour=Interactions), size=1, alpha=0.4) +ggtitle("pOXA-48_k8")+
+  theme(legend.position = "top") + 
+    ylab("Excess fraction of PPIs per sample-pOXA-48_k8 pair") + ylim(-0.2,0.8)+ 
+    xlab("pOXA-48_k8-interacting genes per sample")  + xlim(0,460)+
+    scale_color_gradient2(mid="pink", high="purple", midpoint=100) +
+    geom_point(aes(colour=Interactions), size=pOXA48k8$Interactions/200, alpha=0.4) + 
+    theme(panel.background = element_rect(fill = "white"), panel.grid.major = 
+             element_line(size=0.2, linetype = 'dotted', colour = "grey")) 
+
+pdf(file="FIGURES_TABLES/Fig_2_pOXA48_excessPPIs.pdf", width=9, height=10)
+ggarrange(q1, q2, q3, q4, ncol=2, nrow=2, labels = c("A", "B", "C", "D"))
+dev.off()
+
+# all 
+write.csv(subset(pOXA48, Excess>0.2 & Interactions>100 &
+                    Interacting_genes>100), "Table_S7.csv") # 11 v 1820
+write.table(subset(pKP112, Excess>0.2 & Interactions>100 &
+             Interacting_genes>100), append = T, "Table_S7.csv") # 18 out of 1868
+write.table(subset(pOXA4830715, Excess>0.2 & Interactions>100 &
+             Interacting_genes>100), append = T, "Table_S7.csv") # 2 v 673 
+write.table(subset(pOXA48k8, Excess>0.2 & Interactions>100 &
+             Interacting_genes>100), append = T, "Table_S7.csv") # 0 v 1820
+
+######################## ######################## ######################## ########
+
+b11 <- pOXA48 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend =F, col="darkgreen") +
+    xlab("Residuals of pOXA-48 PPIs per sample") + ylim(0,510) +
+    ylab("Number of pOXA-48-interacting genes per sample") + xlim(-350,350)
+model_pKP112 <- lm(pKP112$Interactions ~ pKP112$Interacting_genes)
+pKP112$Interactions3 <- resid(model_pKP112)
+b12 <- pKP112 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend=F, col="darkcyan")+
+    xlab("Residuals of pKP112 PPIs per sample") +    ylim(0,510) +
+    ylab("Number of pKP112-interacting genes per sample")   + xlim(-350,350)
+model_pOXA4830715 <- lm(pOXA4830715$Interactions ~ pOXA4830715$Interacting_genes)
+pOXA4830715$Interactions3 <- resid(model_pOXA4830715)
+b13 <- pOXA4830715 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend =F, col="purple") +
+    xlab("Residuals of pOXA-48_30715 PPIs per sample") +   ylim(0,510) +
+    ylab("Number of pOXA-48_30715-interacting genes per sample")  + xlim(-350,350)
+model_pOXA48k8 <- lm(pOXA48k8$Interactions ~ pOXA48k8$Interacting_genes)
+pOXA48k8$Interactions3 <- resid(model_pOXA48k8)
+b14 <- pOXA48k8 %>% ggplot(aes(x= (Interactions3), y= (Interacting_genes), fill=Plasmid))+
+   geom_jitter(aes(colour=Plasmid), size=1, alpha=0.2, show.legend =F, col="red") +
+    xlab("Residuals of pOXA48_k8 PPIs per sample") +   ylim(0,510) +
+    ylab("Number of pOXA48_k8-interacting genes per sample")  + xlim(-350,350)
+
+b11new <- ggExtra::ggMarginal(b11, type="densigram", size=6, colour="grey", bins=50)
+b12new <- ggExtra::ggMarginal(b12, type="densigram", size=6, colour="grey", bins=50)
+b13new <- ggExtra::ggMarginal(b13, type="densigram", size=6, colour="grey", bins=50)
+b14new <- ggExtra::ggMarginal(b14, type="densigram", size=6, colour="grey", bins=50)
+pdf(file="FIGURES_TABLES/Fig_S4_pOXA48_interacting_genes.pdf", width=9, height=10)
+ggarrange(b11new, b12new, b13new, b14new, ncol=2, nrow=2, labels = c("A", "B", "C", "D"))
+dev.off()
+
+ ############# ############# ############# ############# #############
+
+library(dplyr)
+library(ppcor)
+library(ggplot2)
+library(ggcorrplot)
+library(RColorBrewer)
+library(knitr)
+library(gplots)
+library(ggpubr)
+library(readr)
+
+setwd("/Volumes/GoogleDrive/My Drive/TDA_Summer2021/")
+inall <- data.frame(read_csv("plasmidGenesTable.csv"))
+inall <- inall[,-c(1)]
+rownames(inall) <- make.names(inall[,1], unique =T)
+inall <- inall[,-c(1)]
+dim(inall) # 4445 9172
+inall_2 <- inall %>% select_if(colSums(.) != 0)
+dim(inall_2) # 4445 7128
+inall <- inall_2[rowSums(inall_2[, -1]) > 0, ]
+dim(inall) # 3176 7128
+inall[1:2,1:3]
+#View(subset(inall, fimt>0))
+
+inallpcor <- pcor(inall)
+str(inallpcor) # r, n, P
+inallpcor$estimate[is.na(inallpcor$estimate)] <- 0
+inallpcor$p.value[is.na(inallpcor$p.value)] <- 0
+colnames(inallpcor$estimate) <- colnames(inall) 
+rownames(inallpcor$estimate) <- colnames(inall) 
+colnames(inallpcor$p.value) <- colnames(inall) 
+rownames(inallpcor$p.value) <- colnames(inall) 
+hist(inallpcor$estimate, breaks=201, col="green") + grid() # sanity checks
+inallpcor$estimate[1:3,1:3]
+
+dim(inallpcor$p.value)
+inallpcor_adj <- matrix(p.adjust(inallpcor$p.value, method="BH", 7128*7128),
+                        nrow=7128, ncol=7128)
+dim(inallpcor_adj)
+colnames(inallpcor_adj) <- colnames(inall) 
+rownames(inallpcor_adj) <- colnames(inall) 
+
+write.csv(inallpcor_adj, "correlation_across_all_nonzero_genes_pvalues.csv")
+write.csv(inallpcor$estimate, "correlation_across_all_nonzero_genes_r.csv")
+
+# other plotting options don't work
+pdf("heatmap.all.pdf", width=147, height=147,  bg="white")
+heatmap.2((inallpcor$estimate), col=colorRampPalette(c("red","white", "blue")), 
+           trace="none",)
+dev.off()
+
+##################### get genes highly associated with pil genes # use 
+# check name synonyns
+inall[1:2, 4324:4347]
+colnames(in2)
+inall_pil <- subset(inall, pilk>0| pili>0| pilj>0| pill>0| pilm>0| piln>0| pilo>0| 
+         pilp>0 | pilq>0 | pilr>0 | pils>0 | pilt>0 | pilu>0 | pilv>0 | pila>0 |
+           pilv_1>0 | pilt_1>0 | pilv_2>0 |  pilo2>0)
+dim(inall_pil) # 355 samples 7128 genes
+inall_pil_2 <- inall_pil %>% select_if(colSums(.) != 0)
+inall_pil <- inall_pil_2[rowSums(inall_pil_2[, -1]) > 0, ]
+dim(inall_pil) # 355 samples 6114 genes
+
+# focus on pEK204-related pil genes
+inall_pil2 <- subset(inall, pilk>0| pili>0| pilj>0| pill>0| pilm>0| piln>0| pilo>0| 
+         pilp>0 | pilq>0 | pilr>0 | pils>0 | pilt>0 | pilu>0 | pilv>0 |
+           pilv_1>0 | pilt_1>0 | pilv_2>0 |  pilo2>0)
+dim(inall_pil2) # 343 samples 7128 genes
+inall_pil_2 <- inall_pil2 %>% select_if(colSums(.) != 0)
+inall_pil2 <- inall_pil_2[rowSums(inall_pil_2[, -1]) > 0, ]
+dim(inall_pil2) # 343 samples 6114 genes
+View(inall_pil2[1:33,3753:3760])
+inall_pil2[,3748] <- inall_pil2  %>%  transmute(pilo = coalesce(pilo, pilo2))
+inall_pil2 <- inall_pil2[,-c(3749)]
+inall_pil2[,3753] <- inall_pil2   %>%  transmute(pilT = coalesce(pilt, pilt_1))
+inall_pil2 <- inall_pil2[,-c(3754)]
+inall_pil2[,3755] <- inall_pil2 %>% transmute(pilv = coalesce(pilv, pilv_1, pilv_2))
+inall_pil2 <- inall_pil2[,-c(3756,3757)]
+dim(inall_pil2) #343 samples, 6110 genes
+
+inall_pil2_pcor <- pcor(inall_pil2)
+str(inall_pil2_pcor) # r, n, P
+inall_pil2_pcor$estimate[is.na(inall_pil2_pcor$estimate)] <- 0
+inall_pil2_pcor$p.value[is.na(inall_pil2_pcor$p.value)] <- 0
+colnames(inall_pil2_pcor$estimate) <- colnames(inall_pil2) 
+rownames(inall_pil2_pcor$estimate) <- colnames(inall_pil2) 
+colnames(inall_pil2_pcor$p.value) <- colnames(inall_pil2) 
+rownames(inall_pil2_pcor$p.value) <- colnames(inall_pil2) 
+hist(inall_pil2_pcor$estimate, breaks=201, col="green") + grid() # sanity checks
+inall_pil2_pcor$estimate[1:3,1:3]
+
+dim(inall_pil2_pcor$p.value)[1] # 6114
+dim(inall_pil2_pcor$p.value)[2]
+inall_pil2_pcor_adj <- matrix(p.adjust(inall_pil2_pcor$p.value, method="BH",
+          dim(inall_pil2_pcor$p.value)[1]*dim(inall_pil2_pcor$p.value)[2]),
+      nrow=dim(inall_pil2_pcor$p.value)[1], ncol=dim(inall_pil2_pcor$p.value)[2])
+dim(inall_pil2_pcor_adj)
+colnames(inall_pil2_pcor_adj) <- colnames(inall_pil2) 
+rownames(inall_pil2_pcor_adj) <- colnames(inall_pil2) 
+
+pilset <- inall_pil2_pcor$estimate[,3741:3756] # pil
+View(pilset)
+# other plots did not work
+pdf("heatmap.inall_pil2.pdf", width=147, height=147,  bg="white")
+heatmap.2((inall_pil2_pcor$estimate),  trace="none",
+          col=colorRampPalette(c("red","white", "blue")))
+dev.off()
+
+write.csv(inall_pil2_pcor, "correlation_across_pil_genes_pvalues.csv")
+write.csv(inall_pil2_pcor$estimate, "correlation_across_pil_genes_r.csv")
+
+
+######################## get genes highly associated with fim genes
+# check name synonyms
+inall[1:2, 1787:1807]
+inall_fim <- subset(inall, fima>0 | fima_2>0| fima_3>0| fima_4>0| fimc>0|
+                     fimc_2>0| fimd>0| fimd_3>0| fimd_4>0| fimd_5>0|  
+                     fimf>0| fime>0| fimg>0| fimh>0| fimi>0| 
+                       fimt>0|  fimy>0| fimz>0 | fim>0 | fimb>0)
+dim(inall_fim) # 156 samples 7128 genes
+inall_fim_2 <- inall_fim %>% select_if(colSums(.) != 0)
+inall_fim <- inall_fim_2[rowSums(inall_fim_2[, -1]) > 0, ]
+dim(inall_fim) # 156 samples 6110 genes
+View(inall_fim[1:3,1528:1548])
+
+inall_fim_pcor <- pcor(inall_fim)
+str(inall_fim_pcor) # r, n, P
+inall_fim_pcor$estimate[is.na(inall_fim_pcor$estimate)] <- 0
+inall_fim_pcor$p.value[is.na(inall_fim_pcor$p.value)] <- 0
+colnames(inall_fim_pcor$estimate) <- colnames(inall_fim) 
+rownames(inall_fim_pcor$estimate) <- colnames(inall_fim) 
+colnames(inall_fim_pcor$p.value) <- colnames(inall_fim) 
+rownames(inall_fim_pcor$p.value) <- colnames(inall_fim) 
+hist(inall_fim_pcor$estimate, breaks=201, col="green") + grid() # sanity checks
+inall_fim_pcor$estimate[1:3,1:3]
+
+dim(inall_fim_pcor$p.value)[1] # 6114
+dim(inall_fim_pcor$p.value)[2]
+inall_fim_pcor_adj <- matrix(p.adjust(inall_fim_pcor$p.value, method="BH",
+          dim(inall_fim_pcor$p.value)[1]*dim(inall_fim_pcor$p.value)[2]),
+      nrow=dim(inall_fim_pcor$p.value)[1], ncol=dim(inall_fim_pcor$p.value)[2])
+dim(inall_fim_pcor_adj)
+colnames(inall_fim_pcor_adj) <- colnames(inall_fim) 
+rownames(inall_fim_pcor_adj) <- colnames(inall_fim) 
+
+fimset <- inall_fim_pcor$estimate[,1528:1548] # fim
+View(fimset)
+heatmap.2(fimset,  trace="none")
+
+# other plots did not work
+pdf("heatmap.inall_fim.pdf", width=147, height=147,  bg="white")
+heatmap.2((inall_fim_pcor$estimate),  trace="none",
+          col=colorRampPalette(c("red","white", "blue")))
+dev.off()
+
+write.csv(inall_fim_pcor, "correlation_across_fim_genes_pvalues.csv")
+write.csv(inall_fim_pcor$estimate, "correlation_across_fim_genes_r.csv")
+
+############ all fimbrial genes #########
+######################## get genes highly associated with all genes
+# check name synonyms
+inall_op <- subset(inall, fima>0,"f7-2">0, foog>0,foob>0,ecp_4533>0,ecp_4536>0,
+          ecp_4538>0, ecp_4539>0,ecp_4540>0,ecp_4541>0,ecp_4532>0, atgg>0, atpb>0,
+          atpa>0, atpd>0, apth>0, pape_2>0, papa_2>0, sfab>0, papc_2>0, papd_2>0,
+        atpf>0,aptc>0,apte>0,paph_2>0,papi>0,papi_2>0,papj>0,papj_2>0,papk>0,fima_1>0,
+        select=c(fima,  atpb,atpa, atpd, atpf)) 
+dim(inall_op) # 88 samples 7128 genes
+inall_op_2 <- inall_op %>% select_if(colSums(.) != 0)
+inall_op <- inall_op_2[rowSums(inall_op_2[, -1]) > 0, ]
+dim(inall_op) # 156 samples 5655 genes
+View(inall_op[1:3,1:4])
+
+inall_op_pcor <- pcor(inall_op)
+str(inall_op_pcor) # r, n, P
+inall_fim_pcor$estimate[is.na(inall_fim_pcor$estimate)] <- 0
+inall_fim_pcor$p.value[is.na(inall_fim_pcor$p.value)] <- 0
+colnames(inall_fim_pcor$estimate) <- colnames(inall_fim) 
+rownames(inall_fim_pcor$estimate) <- colnames(inall_fim) 
+colnames(inall_fim_pcor$p.value) <- colnames(inall_fim) 
+rownames(inall_fim_pcor$p.value) <- colnames(inall_fim) 
+hist(inall_fim_pcor$estimate, breaks=201, col="green") + grid() # sanity checks
+inall_fim_pcor$estimate[1:3,1:3]
+
+dim(inall_fim_pcor$p.value)[1] # 6114
+dim(inall_fim_pcor$p.value)[2]
+inall_fim_pcor_adj <- matrix(p.adjust(inall_fim_pcor$p.value, method="BH",
+          dim(inall_fim_pcor$p.value)[1]*dim(inall_fim_pcor$p.value)[2]),
+      nrow=dim(inall_fim_pcor$p.value)[1], ncol=dim(inall_fim_pcor$p.value)[2])
+dim(inall_fim_pcor_adj)
+colnames(inall_fim_pcor_adj) <- colnames(inall_fim) 
+rownames(inall_fim_pcor_adj) <- colnames(inall_fim) 
+
+fimset <- inall_fim_pcor$estimate[,1528:1548] # fim
+View(fimset)
+heatmap.2(fimset,  trace="none")
+
+# other plots did not work
+pdf("heatmap.inall_fim.pdf", width=147, height=147,  bg="white")
+heatmap.2((inall_fim_pcor$estimate),  trace="none",
+          col=colorRampPalette(c("red","white", "blue")))
+dev.off()
+
+write.csv(inall_fim_pcor, "correlation_across_fim_genes_pvalues.csv")
+write.csv(inall_fim_pcor$estimate, "correlation_across_fim_genes_r.csv")
+
+
+########
+# get genes highly associated with pap genes # exclude papx
+# check name synonymns
+inall[1:2, 4092:4097]
+inall_pap <- subset(inall, papa5>0 | pap>0| papc>0| papd>0 )
+dim(inall_pap) # 76 samples 7128 genes
+inall_pap_2 <- inall_pap %>% select_if(colSums(.) != 0)
+inall_pap <- inall_pap_2[rowSums(inall_pap_2[, -1]) > 0, ]
+dim(inall_pap) # 76 samples 5019 genes
+View(inall_pap[1:3,3741:3760])
+
+inall_pap_pcor <- pcor(inall_pap)  
+str(inall_pap_pcor) # r, n, P
+inall_pap_pcor$estimate[is.na(inall_pap_pcor$estimate)] <- 0
+inall_pap_pcor$p.value[is.na(inall_pap_pcor$p.value)] <- 0
+colnames(inall_pap_pcor$estimate) <- colnames(inall_pap) 
+rownames(inall_pap_pcor$estimate) <- colnames(inall_pap) 
+colnames(inall_pap_pcor$p.value) <- colnames(inall_pap) 
+rownames(inall_pap_pcor$p.value) <- colnames(inall_pap) 
+hist(inall_pap_pcor$estimate, breaks=201, col="green") + grid() # sanity checks
+inall_pap_pcor$estimate[1:3,1:3]
+
+dim(inall_pap_pcor$p.value)[1] # 6114
+dim(inall_pap_pcor$p.value)[2]
+inall_fim_pcor_adj <- matrix(p.adjust(inall_pap_pcor$p.value, method="BH",
+          dim(inall_pap_pcor$p.value)[1]*dim(inall_pap_pcor$p.value)[2]),
+      nrow=dim(inall_pap_pcor$p.value)[1], ncol=dim(inall_pap_pcor$p.value)[2])
+dim(inall_fim_pcor_adj)
+colnames(inall_fim_pcor_adj) <- colnames(inall_pap) 
+rownames(inall_fim_pcor_adj) <- colnames(inall_pap) 
+
+# other plots did not work
+pdf("heatmap.inall_pap.pdf", width=147, height=147,  bg="white")
+heatmap.2((inall_pap_pcor$estimate),  trace="none",
+          col=colorRampPalette(c("red","white", "blue")))
+dev.off()
+
+############# ############# ############# ############# #############
+setwd("/Volumes/GoogleDrive/My Drive/TDA_Summer2021/OLDFILES")
+in3 <- data.frame(read.csv("adhesins.interactions.csv"))
+dim(in3) #  4377   51
+rownames(in3) <- in3[,1]
+View(in3)
+in3[,2] <- in3  %>%  transmute(fimA = coalesce(fima, fima_2, fima_3, fima_4))
+in3 <- in3[,-c(1,3:5)]
+in3[,3] <- in3  %>%  transmute(fimC = coalesce(fimc, fimc_2))
+in3 <- in3[,-c(4)]
+in3[,4] <- in3  %>%  transmute(fimD = coalesce(fimd, fimd_3, fimd_4, fimd_5, fimd_6))
+in3 <- in3[,-c(5:8)]
+in3[,6] <- in3  %>%  transmute(fimF = coalesce(fimf, fimf_1))
+in3 <- in3[,-c(7)]
+in3[,15] <- in3  %>%  transmute(papA = coalesce(pap, papa5))
+in3 <- in3[,-c(16)]
+in3[,26] <- in3  %>%  transmute(pilo = coalesce(pilo, pilo2))
+in3 <- in3[,-c(27)]
+in3[,31] <- in3  %>%  transmute(pilT = coalesce(pilt, pilt_1))
+in3 <- in3[,-c(32)]
+in3[,33] <- in3  %>%  transmute(pilv = coalesce(pilv, pilv_1, pilv_2, pilvc, pilvd))
+in3 <- in3[,-c(34:37)]
+in3 <- in3[,-c(12,22)] # remove uninformative data
+dim(in3) # 4377   32
+as.numeric(unlist(in3))
+in3[is.na(in3)] <- 0
+colSums(in3)
+
+####
+dim(in3)
+in3pcor <- pcor(in3)
+str(in3pcor) # r, n, P
+colnames(in3pcor$estimate) <- colnames(in3) 
+rownames(in3pcor$estimate) <- colnames(in3) 
+colnames(in3pcor$p.value) <- colnames(in3) 
+rownames(in3pcor$p.value) <- colnames(in3) 
+hist(in3pcor$p.value, breaks=101, col="green") + grid()
+hist(in3pcor$estimate, breaks=101, col="green") + grid() # sanity checks
+par(mfrow=c(1,1))
+
+ggcorrplot::ggcorrplot(in3pcor$estimate)  +  theme_classic() +
+ scale_x_discrete(expand=c(0,0)) + scale_y_discrete(expand=c(0,0))   +
+ labs(x = NULL, y = NULL, fill = "Pearson's\nCorrelation", title="") 
+
+View(in3pcor$estimate)
+in3pcor_adj <- matrix(p.adjust(in3pcor$p.value, method="BH", 32*32), nrow=32, ncol=32) 
+dim(in3pcor_adj)
+colnames(in3pcor_adj) <- colnames(in3) 
+rownames(in3pcor_adj) <- colnames(in3) 
+hist(in3pcor_adj, breaks=101, col="blue") + grid()
+heatmap.2((in3pcor_adj), trace="none",col=colorRampPalette(c("blue", "white", "red")))
+
+pdf("heatmap.5.pdf", width=7, height=7,  bg="white")
+heatmap.2((in3pcor_adj), trace="none", col=colorRampPalette(c("blue","white","red")))
+dev.off()
+pdf("heatmap.6.pdf", width=7, height=7,  bg="white")
+heatmap.2((in3pcor$estimate),trace="none", col=colorRampPalette(c("black","white", "green")))
+dev.off()
+
+############################################################
+write.csv((round(cov(in1),3)), "covariance_adhesins.csv") # get gene co-variance
+View(round(cov(in1),3)) # interaction rates
+
+in1pcor <- pcor(in1)
+str(in1pcor) # r, n, P
+colnames(in1pcor$estimate) <- colnames(in1) 
+rownames(in1pcor$estimate) <- colnames(in1) 
+colnames(in1pcor$p.value) <- colnames(in1) 
+rownames(in1pcor$p.value) <- colnames(in1) 
+hist(in1pcor$p.value, breaks=101, col="red") + grid()
+hist(in1pcor$estimate, breaks=101, col="blue") + grid() # sanity checks
+
+ggcorrplot::ggcorrplot(in1pcor$estimate)  +  theme_classic() +
+ scale_x_discrete(expand=c(0,0)) + scale_y_discrete(expand=c(0,0))   +
+ labs(x = NULL, y = NULL, fill = "Pearson's\nCorrelation", title="") 
+#View(in1pcor$estimate)
+heatmap.2((in1pcor$estimate),trace="none",  
+          col=colorRampPalette(c("blue", "white", "red")))
+
+in1pcor_adj <- matrix(p.adjust(in1pcor$p.value, method="BH", 32*32),
+                      nrow=32, ncol=32) #View(in1pcor_adj)
+colnames(in1pcor_adj) <- colnames(in1) 
+rownames(in1pcor_adj) <- colnames(in1) 
+hist(in1pcor_adj, breaks=101, col="blue") + grid()
+heatmap.2((in1pcor_adj), trace="none",
+           col=colorRampPalette(c("blue", "white", "red")))
+
+pdf("heatmap.3.pdf", width=7, height=7,  bg="white")
+heatmap.2((in1pcor_adj), trace="none", col=colorRampPalette(c("blue","white","red")))
+dev.off()
+pdf("heatmap.4.pdf", width=7, height=7,  bg="white")
+heatmap.2((in1pcor$estimate),trace="none", col=colorRampPalette(c("black","white", "green")))
+dev.off()
+
+colSums(in3pcor$estimate - in1pcor$estimate) # no difference
+
+## pil only ## ## ## 
+in2 <- in1[,18:32]
+View(in2)
+in2pcor <- pcor(in2)
+colnames(in2pcor$estimate) <- colnames(in2) 
+rownames(in2pcor$estimate) <- colnames(in2) 
+colnames(in2pcor$p.value) <- colnames(in2) 
+rownames(in2pcor$p.value) <- colnames(in2) 
+hist(in2pcor$p.value, breaks=101, col="red") + grid()
+hist(in2pcor$estimate, breaks=101, col="blue") + grid() # sanity checks
+#dim(in2pcor$p.value)
+in2pcor_adj <- matrix(p.adjust(in2pcor$p.value, method="BH", 15*15),
+                      nrow=15, ncol=15) #View(in1pcor_adj)
+colnames(in2pcor_adj) <- colnames(in2) 
+rownames(in2pcor_adj) <- colnames(in2) 
+hist(in2pcor_adj, breaks=101, col="blue") + grid()
+View(in2pcor$estimate)
+pdf("heatmap.1.pdf", width=6, height=6,  bg="white")
+heatmap.2((in2pcor_adj), trace="none",
+           col=colorRampPalette(c("blue", "white", "red")))
+dev.off()
+pdf("heatmap.2.pdf", width=6, height=6,  bg="white")
+heatmap.2((in2pcor$estimate),trace="none",  
+          col=colorRampPalette(c("black", "white", "green")))
+dev.off()
+############# 
+```

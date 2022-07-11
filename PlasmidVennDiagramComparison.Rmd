@@ -1,0 +1,123 @@
+library(BiocManager)
+# BiocManager::install("genbankr")### this seemed to install genbankr 
+install.packages("VennDiagram", ask=F)
+library(VennDiagram)
+install.packages("rentrez", ask=F)
+library(rentrez)
+install.packages("tidyverse", ask=F)
+library(tidyverse)
+install.packages("dplyr", ask=F)
+library(dplyr)
+install.packages("stringr", ask=F)
+library(stringr)
+BiocManager::install("GenomicRanges", ask=F)
+library(GenomicRanges)
+install.packages("readr", ask=F)
+library(readr)
+install.packages("curl", ask=F)
+library(curl)
+install.packages("httr", ask=F)
+library(httr)
+BiocManager::install(c("msa"), ask=F)
+library(msa) # 1.24.0
+install.packages("seqinr")
+library("seqinr") # 4.2-16
+library(Biostrings)
+install.packages("ggVennDiagram") ## intall ggvenndiagram for code to enable the ability to draw diagrams 
+library("ggVennDiagram")
+install.packages("scales")  
+library("scales")
+
+getplasmidgenes <- function(GBAccession_ID){ #  function 
+  plasmid <- readGenBank(GBAccession(GBAccession_ID), partial=TRUE)
+  plasmid_genes <- toupper(as.vector( cds(plasmid)$gene))
+  plasmid_genes <- gsub("[()]",  replacement="", plasmid_genes) # remove ( + )
+  
+  # unique protein-coding genes all uppercase sorted #  length(plasmid_genes)
+  return(tolower(plasmid_genes)) } # end function 
+
+gettranslation <- function(GBAccession_ID){ #  function 
+  plasmid <- readGenBank(GBAccession(GBAccession_ID), partial=TRUE)
+  translation <- toupper(as.vector(cds(plasmid)$translation))
+  return(tolower(translation)) } # end function 
+
+######## 
+getwd()
+setwd("~/Google Drive/TDA_Summer2021/RMD_FILES")
+
+set_entrez_key("eaf09dca7612332fa2595c903c24d1afef08")
+Sys.getenv("ENTREZ_KEY")
+
+#create an empty table
+table_plasmid <- data.frame(Sample=character(), Plasmid=character(), 
+                            SampleGenes=integer(), PlasmidGenes=integer(), Intersection=integer(),
+                            PlasmidOnly=integer(), SampleOnly=integer(), Matching=integer())
+
+accessID2 = c("EU935739", #  pEK499
+              "EU935740", #  pEK204
+              "EU935738", #  pEK516
+              "NZ_HG941719.1", # pEC958 
+              "JN626286.1", # pOXA-48
+              "LN864819.1", # pKP112
+              "NZ_KX523901", # pOXA-48_30715
+              "MT441554.1" # pOXA-48_k8
+)  # end vector # check in https://www.ncbi.nlm.nih.gov/nuccore
+
+pEK499 <- getplasmidgenes(accessID2[1]) ##gives table of all genes present in plasmid
+pEK204 <- getplasmidgenes(accessID2[2])
+pEK516 <- getplasmidgenes(accessID2[3])
+pEC9582 <- getplasmidgenes(accessID2[4])
+is.na(getplasmidgenes(accessID2[2])) ## this shows whether there is any N/A genes present in the plasmids
+pEK499omit <-na.omit(pEK499)
+pEK204omit <- na.omit(pEK204)
+pEK516omit <- na.omit(pEK516)
+pEC9582omit <- na.omit(pEC9582)
+## creates vector of all genes present in plasmids while getting rid of N/a genes. Eg. This brings the total number of genes in the set from 95 to 89 for pEK204 .
+
+pEK499unique <- unique(pEK499omit)
+pEK204unique <- unique(pEK204omit) 
+pEk516unique <- unique(pEK516omit)
+pEC9582unique <- unique(pEC9582omit)
+
+one1 <- intersect(pEK499unique, pEK204unique)
+one2 <- intersect(one1, pEk516unique)
+intersect(one2, pEC9582unique )
+
+## creates vector of all unique genes in each plasmid.
+
+pEKcomparison <-list(pEK499unique, pEk516unique, pEC9582unique, pEK204unique)   ### creates dataset pEKcomparison for Four way venn diagram       
+ggVennDiagram( pEKcomparison, label = 'count' ,
+  category.names = c("pEK499 ","pEK516", "pEC9582","pEK204")
+) +ggplot2::scale_fill_gradient(low="red",high = "green")
+
+
+### Second set of plasmids to analyse.
+#"JN626286.1", # pOXA-48
+#"LN864819.1", # pKP112
+#"NZ_KX523901", # pOXA-48_30715
+#"MT441554.1" # pOXA-48_k8
+
+pOXA_48 <- getplasmidgenes(accessID2[5]) 
+pKP112 <- getplasmidgenes(accessID2[6])
+pOXA_48_30715 <- getplasmidgenes(accessID2[7])
+pOXA_48_k8 <- getplasmidgenes(accessID2[8])
+
+pOXA_48omit <- na.omit(pOXA_48)
+pKP112omit <- na.omit(pKP112)
+pOXA_48_30715omit <- na.omit(pOXA_48_30715)
+pOXA_48_k8omit <- na.omit(pOXA_48_k8)
+
+pOXA_48unique <-unique(pOXA_48omit)
+pKP112unique <- unique(pKP112omit)
+pOXA_48_30715unique <- unique(pOXA_48_30715omit)
+pOXA_48_k8unique <- unique(pOXA_48_k8omit)
+
+one3 <- intersect(pOXA_48unique, pKP112unique)
+one4 <- intersect(one3, pOXA_48_30715unique)
+intersect(one4, pOXA_48_k8unique )
+
+pOXAcomparison <-list(pOXA_48_k8unique, pKP112unique, pOXA_48_30715unique, pOXA_48_k8unique)
+ggVennDiagram(  pOXAcomparison, label = 'count',
+  category.names = c("pOXA-48 ","pKP122","pOXA-48_30715", "pOXA_48_k8")
+) + ggplot2::scale_fill_gradient(low="red",high = "purple")
+
