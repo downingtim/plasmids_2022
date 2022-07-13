@@ -168,7 +168,7 @@ for (k in o[1]:o[1]){ # o[1:length(o)]){           # change k  1:4445
       input$interactions[k] <- length(links_all$combined_score)
       
    ######## get plasmid's gene interactions # select plasmid-associated interactions
-    for (jj in 1:length(accessID2)){
+    for (jj in 1:length(accessID2)-1){
       access_ID2 = accessID2[jj] # select plasmid 
         try( p1 <- getplasmidgenes(access_ID2)  ) # str(p1) # 84 genes, single vector of names
       print(access_ID2)
