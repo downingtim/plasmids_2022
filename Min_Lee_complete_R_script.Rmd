@@ -99,7 +99,7 @@ getgenes.short <- function(GBAccession_ID){
 
 #------------ pOXA-48 analysis ----------
 getwd()
-setwd("/Volumes/GoogleDrive/My Drive/TDA_Summer2021/RMD_FILES")
+setwd("/Volumes/GoogleDrive/My Drive/TDA_Summer2021/FIMBRIAE_paper/")
 input <- data.frame(read.csv("stringInput.csv")) # species, proteins, String_ID
 input$Species <- gsub("/",  replacement="-", input$Species)
 input$interactions <- rep(0, length(input$Species))
@@ -139,7 +139,7 @@ table_plasmid_poxa <- data.frame(Plasmid=character(), Chrom=character(), Genes=i
 o <- which(input$ID %in% speciesID)
   
 ########### get chromosomal genes  # 
-for (k in o[1:length(o)]){           # change k  1:4445
+for (k in o[1]:o[1]){ # o[1:length(o)]){           # change k  1:4445
       
       string_db <- STRINGdb$new(version="11", species=input$ID[k], # new STRINGdb object
                                 score_threshold=400, input_directory="")
@@ -164,20 +164,21 @@ for (k in o[1:length(o)]){           # change k  1:4445
       links_all$to_ID <- tolower(to_vector) 
       # str(links_all)  # now: from, to, combined_score, from_ID, to_ID
 
-      write.csv(links_all, paste("OUTPUT/poxa/", input$Species[k], "_chrom_data.csv", sep=""))
+     # write.csv(links_all, paste("OUTPUT/", input$Species[k], "_chrom_data.csv", sep=""))
       input$interactions[k] <- length(links_all$combined_score)
       
    ######## get plasmid's gene interactions # select plasmid-associated interactions
     for (jj in 1:length(accessID2)){
       access_ID2 = accessID2[jj] # select plasmid 
-      p1 <- getplasmidgenes(access_ID2) # str(p1) # 84 genes, single vector of names
+        try( p1 <- getplasmidgenes(access_ID2)  ) # str(p1) # 84 genes, single vector of names
+      print(access_ID2)
       
       if(length(p1) >0){ # if genes, else ignore
       mapped_p <- data.frame() # mapped_pEK499$STRING_id # has from/to data
       for (m in 1:length(p1)){	# get plasmid genes 
         mapped_p <- rbind(mapped_p, data.frame(subset(links_all, (to_ID==p1[m])|(from_ID==p1[m]))))}
       dim(mapped_p) # association between plasmid and chromosomes
-      write.csv(mapped_p, paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, ".csv", sep=""))
+      write.csv(mapped_p, paste("OUTPUT/", input$Species[k], "_", access_ID2, ".csv", sep=""))
      
       # add row to plasmid table
       table_plasmid_poxa[length(table_plasmid_poxa$Plasmid)+1,] <-
@@ -187,18 +188,18 @@ for (k in o[1:length(o)]){           # change k  1:4445
       
      if(dim(mapped_p)[1] > 0){ # if genes found
 
-      pdf(paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, "_plasmid-chrom_subnetwork.pdf", sep=""),
+      pdf(paste("OUTPUT/", input$Species[k], "_", access_ID2, "_plasmid-chrom_subnetwork.pdf", sep=""),
           width=16, height=20)
       string_db$plot_network(string_db$mp(unique(c(mapped_p$from_ID, mapped_p$to_ID)))) # make plot 
       dev.off()    # make a plot of the network for fun
       
-      pdf(paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, "_intraplasmid_subnetwork.pdf", sep=""),
+      pdf(paste("OUTPUT/", input$Species[k], "_", access_ID2, "_intraplasmid_subnetwork.pdf", sep=""),
           width=16, height=20)
       string_db$plot_network(string_db$mp(p1)) # make plot 
       dev.off()    # make a plot of the network for fun
       
       #  plot histogram of score distribution
-      pdf(paste("OUTPUT/poxa/", input$Species[k], "_", access_ID2, "_chrom_histogram.pdf",sep=""),
+      pdf(paste("OUTPUT/", input$Species[k], "_", access_ID2, "_chrom_histogram.pdf",sep=""),
           width=8, height=10)
       hist(mapped_p$combined_score, xlab="score", xlim=c(0,1000), ylab="#pairs",
            cex=2, breaks=90,   xaxp=c(0,1000,40), yaxp=c(0,4000,40) )
