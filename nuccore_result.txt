@@ -1,0 +1,124 @@
+
+1. Klebsiella pneumoniae plasmid pOXA-48, complete sequence
+61,881 bp circular DNA 
+NC_019154.1 GI:410656186
+
+2. Serratia marcescens strain H28-CPsm plasmid pOXA-48, complete sequence
+62,038 bp circular DNA 
+NZ_MN913380.1 GI:1897972719
+
+3. Serratia marcescens strain H28-CPsm plasmid pOXA-48, complete sequence
+62,038 bp circular DNA 
+MN913380.1 GI:1862658367
+
+4. Klebsiella pneumoniae strain Kp11978 plasmid pOXA-48, complete sequence
+61,881 bp circular DNA 
+JN626286.1 GI:359422634
+
+5. Klebsiella pneumoniae plasmid pKP112, complete sequence, strain KP112
+84,252 bp circular DNA 
+LN864819.1 GI:901692722
+
+6. Klebsiella pneumoniae strain Kpn-30891/15 plasmid pOXA-48_30891, complete sequence.
+66,059 bp circular DNA 
+NZ_KX523902.1 GI:1848400854
+
+7. Klebsiella pneumoniae strain Kpn-04963/15 plasmid pOXA-48_4963, complete sequence.
+63,566 bp circular DNA 
+NZ_KX523900.1 GI:1848400834
+
+8. Klebsiella pneumoniae strain Kpn-30715/15 plasmid pOXA-48_30715, complete sequence.
+65,488 bp circular DNA 
+NZ_KX523901.1 GI:1848400822
+
+9. Klebsiella pneumoniae strain Kpn-30891/15 plasmid pOXA-48_30891, complete sequence
+66,059 bp circular DNA 
+KX523902.1 GI:1093404856
+
+10. Klebsiella pneumoniae strain Kpn-04963/15 plasmid pOXA-48_4963, complete sequence
+63,566 bp circular DNA 
+KX523900.1 GI:1093404780
+
+11. Klebsiella pneumoniae strain Kpn-30715/15 plasmid pOXA-48_30715, complete sequence
+65,488 bp circular DNA 
+KX523901.1 GI:1093404703
+
+12. Escherichia coli strain EC-JS426 plasmid pOXA-48_EC-JS426, complete sequence
+63,589 bp circular DNA 
+NZ_CP072324.1 GI:2022220997
+
+13. Escherichia coli strain 19-AB01443 plasmid pOX-48-EC1443, complete sequence
+63,627 bp circular DNA 
+NZ_MT193824.1 GI:1884896287
+
+14. Escherichia coli isolate EC-7215 plasmid pOXA-48_E7215, complete sequence
+63,589 bp circular DNA 
+NZ_LR025098.1 GI:1601770107
+
+15. Escherichia coli isolate EC-1639 plasmid pOXA-48_1639, complete sequence
+63,589 bp circular DNA 
+NZ_LR025105.1 GI:1601657419
+
+16. Escherichia coli strain EC-JS426 plasmid pOXA-48_EC-JS426, complete sequence
+63,589 bp circular DNA 
+CP072324.1 GI:2021592656
+
+17. Klebsiella pneumoniae isolate EC-12536 plasmid pOXA-48_A12536, complete sequence
+63,589 bp circular DNA 
+NZ_LR025100.1 GI:1601768030
+
+18. Klebsiella pneumoniae isolate KP980 plasmid pOXA-48_980, complete sequence
+63,589 bp circular DNA 
+NZ_LR025091.1 GI:1601878954
+
+19. Klebsiella pneumoniae isolate KP9201 plasmid pOXA-48_920, complete sequence
+63,592 bp circular DNA 
+NZ_LR025095.1 GI:1574245584
+
+20. Klebsiella pneumoniae strain K8 plasmid pOXA-48_k8, complete sequence
+65,499 bp circular DNA 
+NZ_MT441554.1 GI:1911407374
+
+21. Klebsiella pneumoniae strain K8 plasmid pOXA-48_k8, complete sequence
+65,499 bp circular DNA 
+MT441554.1 GI:1886821497
+
+22. Klebsiella pneumoniae isolate EC-12536 genome assembly, plasmid: pOXA-48_A12536
+63,589 bp circular DNA 
+LR025100.1 GI:1563705915
+
+23. Klebsiella pneumoniae strain Kpn-30929/15 plasmid pOXA-232_30929, complete sequence.
+12,351 bp circular DNA 
+NZ_KX523904.1 GI:1848400788
+
+24. Klebsiella pneumoniae strain Kpn-29144/15 plasmid pOXA-181_29144, complete sequence.
+51,478 bp circular DNA 
+NZ_KX523903.1 GI:1848400767
+
+25. Escherichia coli strain 19-AB01443 plasmid pOX-48-EC1443, complete sequence
+63,627 bp circular DNA 
+MT193824.1 GI:1830583174
+
+26. Klebsiella pneumoniae strain Kpn-29144/15 plasmid pOXA-181_29144, complete sequence
+51,478 bp circular DNA 
+KX523903.1 GI:1098552376
+
+27. Klebsiella pneumoniae strain Kpn-30929/15 plasmid pOXA-232_30929, complete sequence
+12,351 bp circular DNA 
+KX523904.1 GI:1093404932
+
+28. Escherichia coli isolate EC-1639 genome assembly, plasmid: pOXA-48_1639
+63,589 bp circular DNA 
+LR025105.1 GI:1563711441
+
+29. Escherichia coli isolate EC-7215 genome assembly, plasmid: pOXA-48_E7215
+63,589 bp circular DNA 
+LR025098.1 GI:1563700595
+
+30. Klebsiella pneumoniae isolate KP9201 genome assembly, plasmid: pOXA-48_920
+63,592 bp circular DNA 
+LR025095.1 GI:1563695585
+
+31. Klebsiella pneumoniae isolate KP980 genome assembly, plasmid: pOXA-48_980
+63,589 bp circular DNA 
+LR025091.1 GI:1563689733
